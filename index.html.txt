@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yenicespor Finans v3.1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 p-4">
+    <div class="max-w-5xl mx-auto">
+        <div class="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm mb-6 border border-slate-100">
+            <div>
+                <h1 class="text-2xl font-black text-emerald-800 tracking-tight">YENÝCESPOR <span class="text-emerald-500 text-lg font-medium">FÝNANS</span></h1>
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Kulüp Muhasebe Portalý</p>
+            </div>
+            <button onclick="yeniKayit()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-emerald-100 active:scale-95">
+                + Yeni Kayýt
+            </button>
+        </div>
+
+        <div class="flex gap-2 mb-6 bg-slate-200/50 p-1.5 rounded-2xl">
+            <button onclick="tabSec('gelir')" id="tab-gelir" class="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold transition-all shadow-sm">Gelir Kaynaklarý</button>
+            <button onclick="tabSec('gider')" id="tab-gider" class="flex-1 py-3 bg-transparent text-slate-500 rounded-xl font-bold transition-all">Giderler</button>
+        </div>
+
+        <div class="bg-white rounded-[2rem] shadow-xl shadow-slate-200/50 overflow-hidden border border-slate-100">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="bg-slate-50/80 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                        <th class="p-6">Kayýt Adý</th>
+                        <th class="p-6">Kategori</th>
+                        <th class="p-6 text-right">Durum</th>
+                        <th class="p-6 text-center w-24">Ýþlem</th>
+                    </tr>
+                </thead>
+                <tbody id="liste" class="divide-y divide-slate-50">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl scale-up-animation">
+            <div class="flex justify-between items-start mb-8">
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800">Kayýt Yönetimi</h3>
+                    <p class="text-slate-400 text-sm mt-1">Bilgileri güncelleyin veya silin.</p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="cariSil()" class="w-12 h-12 flex items-center justify-center text-rose-500 bg-rose-50 rounded-2xl hover:bg-rose-100 transition-colors" title="SÝL">
+                        <i class="fas fa-trash-can"></i>
+                    </button>
+                    <button onclick="modalKapat()" class="w-12 h-12 flex items-center justify-center text-slate-400 bg-slate-50 rounded-2xl hover:bg-slate-100">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="space-y-6">
+                <div>
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Ýsim / Açýklama</label>
+                    <input id="edit-isim" type="text" class="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl focus:border-emerald-500 focus:outline-none font-bold text-slate-700 transition-all">
+                </div>
+                <button onclick="cariGuncelle()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black shadow-lg shadow-emerald-100 transition-all active:scale-95">
+                    DEÐÝÞÝKLÝKLERÝ KAYDET
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Netlify üzerinden gelecek URL ve KEY
+        // Kod içinde anahtar barýndýrmýyoruz, Netlify ayarlarýndan okuyacak
+        const SB_URL = "https://mnagzuvwxvmzrlbzrfpp.supabase.co";
+        const SB_KEY = "sb_publishable_Nzt_sPkSVU4pR9pc1hocmg_0Axrcv-W"; 
+        const _supabase = supabase.createClient(SB_URL, SB_KEY);
+
+        let aktifTab = 'gelir';
+        let aktifCariId = null;
+
+        window.onload = () => verileriGetir();
+
+        function tabSec(tur) {
+            aktifTab = tur;
+            document.querySelectorAll('button[id^="tab-"]').forEach(btn => {
+                btn.classList.replace('bg-emerald-600', 'bg-transparent');
+                btn.classList.replace('text-white', 'text-slate-500');
+            });
+            const aktifBtn = document.getElementById(`tab-${tur}`);
+            aktifBtn.classList.replace('bg-transparent', 'bg-emerald-600');
+            aktifBtn.classList.replace('text-slate-500', 'text-white');
+            verileriGetir();
+        }
+
+        async function verileriGetir() {
+            const { data, error } = await _supabase.from('cariler').select('*').eq('tur', aktifTab).order('created_at', { ascending: false });
+            const liste = document.getElementById('liste');
+            
+            if (data.length === 0) {
+                liste.innerHTML = `<tr><td colspan="4" class="p-12 text-center text-slate-300 font-medium">Henüz kayýt bulunmuyor.</td></tr>`;
+                return;
+            }
+
+            liste.innerHTML = data.map(item => `
+                <tr class="group hover:bg-slate-50/50 transition-all">
+                    <td class="p-6 font-bold text-slate-700">${item.isim}</td>
+                    <td class="p-6 text-slate-400 text-sm font-medium">${item.kategori || 'Genel'}</td>
+                    <td class="p-6 text-right">
+                        <span class="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter border border-emerald-100">Aktif</span>
+                    </td>
+                    <td class="p-6 text-center">
+                        <button onclick="detayAc('${item.id}', '${item.isim}')" class="text-slate-300 group-hover:text-emerald-600 transition-colors">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function detayAc(id, isim) {
+            aktifCariId = id;
+            document.getElementById('edit-isim').value = isim;
+            const m = document.getElementById('modal');
+            m.classList.replace('hidden', 'flex');
+        }
+
+        function modalKapat() {
+            const m = document.getElementById('modal');
+            m.classList.replace('flex', 'hidden');
+        }
+
+        async function cariGuncelle() {
+            const yeniIsim = document.getElementById('edit-isim').value;
+            if(!yeniIsim) return;
+
+            const { error } = await _supabase.from('cariler').update({ isim: yeniIsim }).eq('id', aktifCariId);
+            if(!error) {
+                modalKapat();
+                verileriGetir();
+            }
+        }
+
+        async function cariSil() {
+            if(confirm('DÝKKAT: Bu kayýt ve bu kayda ait tüm geçmiþ silinecek. Emin misiniz?')) {
+                const { error } = await _supabase.from('cariler').delete().eq('id', aktifCariId);
+                if(!error) {
+                    modalKapat();
+                    verileriGetir();
+                }
+            }
+        }
+
+        async function yeniKayit() {
+            const isim = prompt(`${aktifTab.toUpperCase()} adý giriniz:`);
+            if (isim) {
+                const { error } = await _supabase.from('cariler').insert([{ isim: isim, tur: aktifTab }]);
+                if (error) alert("Hata: " + error.message);
+                else verileriGetir();
+            }
+        }
+    </script>
+</body>
+</html>
