@@ -16,16 +16,16 @@
     <div class="max-w-5xl mx-auto">
         <div class="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm mb-6 border border-slate-100">
             <div>
-                <h1 class="text-2xl font-black text-emerald-800 tracking-tight">YENİCESPOR <span class="text-emerald-500 text-lg font-medium">FİNANS</span></h1>
-                <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Kulüp Muhasebe Portalı</p>
+                <h1 class="text-2xl font-black text-emerald-800 tracking-tight">YENÃCESPOR <span class="text-emerald-500 text-lg font-medium">FÃNANS</span></h1>
+                <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">KulÃ¼p Muhasebe PortalÃ½</p>
             </div>
             <button onclick="yeniKayit()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-emerald-100 active:scale-95">
-                + Yeni Kayıt
+                + Yeni KayÃ½t
             </button>
         </div>
 
         <div class="flex gap-2 mb-6 bg-slate-200/50 p-1.5 rounded-2xl">
-            <button onclick="tabSec('gelir')" id="tab-gelir" class="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold transition-all shadow-sm">Gelir Kaynakları</button>
+            <button onclick="tabSec('gelir')" id="tab-gelir" class="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-bold transition-all shadow-sm">Gelir KaynaklarÃ½</button>
             <button onclick="tabSec('gider')" id="tab-gider" class="flex-1 py-3 bg-transparent text-slate-500 rounded-xl font-bold transition-all">Giderler</button>
         </div>
 
@@ -33,10 +33,10 @@
             <table class="w-full text-left">
                 <thead>
                     <tr class="bg-slate-50/80 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                        <th class="p-6">Kayıt Adı</th>
+                        <th class="p-6">KayÃ½t AdÃ½</th>
                         <th class="p-6">Kategori</th>
                         <th class="p-6 text-right">Durum</th>
-                        <th class="p-6 text-center w-24">İşlem</th>
+                        <th class="p-6 text-center w-24">ÃÃ¾lem</th>
                     </tr>
                 </thead>
                 <tbody id="liste" class="divide-y divide-slate-50">
@@ -49,11 +49,11 @@
         <div class="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl scale-up-animation">
             <div class="flex justify-between items-start mb-8">
                 <div>
-                    <h3 class="text-2xl font-bold text-slate-800">Kayıt Yönetimi</h3>
-                    <p class="text-slate-400 text-sm mt-1">Bilgileri güncelleyin veya silin.</p>
+                    <h3 class="text-2xl font-bold text-slate-800">KayÃ½t YÃ¶netimi</h3>
+                    <p class="text-slate-400 text-sm mt-1">Bilgileri gÃ¼ncelleyin veya silin.</p>
                 </div>
                 <div class="flex gap-2">
-                    <button onclick="cariSil()" class="w-12 h-12 flex items-center justify-center text-rose-500 bg-rose-50 rounded-2xl hover:bg-rose-100 transition-colors" title="SİL">
+                    <button onclick="cariSil()" class="w-12 h-12 flex items-center justify-center text-rose-500 bg-rose-50 rounded-2xl hover:bg-rose-100 transition-colors" title="SÃL">
                         <i class="fas fa-trash-can"></i>
                     </button>
                     <button onclick="modalKapat()" class="w-12 h-12 flex items-center justify-center text-slate-400 bg-slate-50 rounded-2xl hover:bg-slate-100">
@@ -64,19 +64,19 @@
             
             <div class="space-y-6">
                 <div>
-                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">İsim / Açıklama</label>
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Ãsim / AÃ§Ã½klama</label>
                     <input id="edit-isim" type="text" class="w-full bg-slate-50 border-2 border-slate-100 p-4 rounded-2xl focus:border-emerald-500 focus:outline-none font-bold text-slate-700 transition-all">
                 </div>
                 <button onclick="cariGuncelle()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-4 rounded-2xl font-black shadow-lg shadow-emerald-100 transition-all active:scale-95">
-                    DEĞİŞİKLİKLERİ KAYDET
+                    DEÃÃÃÃKLÃKLERÃ KAYDET
                 </button>
             </div>
         </div>
     </div>
 
     <script>
-        // Netlify üzerinden gelecek URL ve KEY
-        // Kod içinde anahtar barındırmıyoruz, Netlify ayarlarından okuyacak
+        // Netlify Ã¼zerinden gelecek URL ve KEY
+        // Kod iÃ§inde anahtar barÃ½ndÃ½rmÃ½yoruz, Netlify ayarlarÃ½ndan okuyacak
         const SB_URL = "https://mnagzuvwxvmzrlbzrfpp.supabase.co";
         const SB_KEY = "sb_publishable_Nzt_sPkSVU4pR9pc1hocmg_0Axrcv-W"; 
         const _supabase = supabase.createClient(SB_URL, SB_KEY);
@@ -103,7 +103,7 @@
             const liste = document.getElementById('liste');
             
             if (data.length === 0) {
-                liste.innerHTML = `<tr><td colspan="4" class="p-12 text-center text-slate-300 font-medium">Henüz kayıt bulunmuyor.</td></tr>`;
+                liste.innerHTML = `<tr><td colspan="4" class="p-12 text-center text-slate-300 font-medium">HenÃ¼z kayÃ½t bulunmuyor.</td></tr>`;
                 return;
             }
 
@@ -147,7 +147,7 @@
         }
 
         async function cariSil() {
-            if(confirm('DİKKAT: Bu kayıt ve bu kayda ait tüm geçmiş silinecek. Emin misiniz?')) {
+            if(confirm('DÃKKAT: Bu kayÃ½t ve bu kayda ait tÃ¼m geÃ§miÃ¾ silinecek. Emin misiniz?')) {
                 const { error } = await _supabase.from('cariler').delete().eq('id', aktifCariId);
                 if(!error) {
                     modalKapat();
@@ -157,7 +157,7 @@
         }
 
         async function yeniKayit() {
-            const isim = prompt(`${aktifTab.toUpperCase()} adı giriniz:`);
+            const isim = prompt(`${aktifTab.toUpperCase()} adÃ½ giriniz:`);
             if (isim) {
                 const { error } = await _supabase.from('cariler').insert([{ isim: isim, tur: aktifTab }]);
                 if (error) alert("Hata: " + error.message);
@@ -166,4 +166,5 @@
         }
     </script>
 </body>
+
 </html>
