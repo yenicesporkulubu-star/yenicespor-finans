@@ -1930,6 +1930,7 @@ function confirmDelete(id){
   const t=state.transactions.find(x=>x.id===id); if(!t) return;
   const c=cariById(t.cari_id);
   // Şifrenin tersi hesapla
+  const rp=getPass().split("").reverse().join("");
   openModal("🗑 İşlemi Sil — Onay Gerekli",`
     <div style="padding:8px 0">
       <div style="background:var(--bg);border:1.5px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
@@ -1939,23 +1940,23 @@ function confirmDelete(id){
         ${t.aciklama?`<div style="font-size:12px;color:var(--muted)">${t.aciklama}</div>`:""}
       </div>
       <div style="background:rgba(230,57,70,.07);border:1.5px solid rgba(230,57,70,.2);border-radius:10px;padding:14px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:700;color:var(--bad);margin-bottom:8px">⚠️ Onaylamak için kutucuğa <b>SİL</b> yazın</div>
-        <input id="delPass" placeholder="SİL yazın..." style="width:100%;font-size:16px;font-weight:700;text-align:center;letter-spacing:3px" autocomplete="off"/>
-        <div id="delPassErr" style="color:var(--bad);font-size:12px;display:none;margin-top:6px">❌ "SİL" yazmadınız, işlem silinmedi.</div>
+        <div style="font-size:12px;font-weight:700;color:var(--bad);margin-bottom:8px">🔐 Silme onayı gerekiyor</div>
+        <input type="password" id="delPass" placeholder="Onay kodunu girin" style="width:100%;font-size:15px;text-align:center" autocomplete="off"/>
+        <div id="delPassErr" style="color:var(--bad);font-size:12px;display:none;margin-top:6px">❌ Hatalı kod, işlem silinmedi.</div>
       </div>
       <div style="display:flex;gap:10px">
-        <button class="btn bad" style="flex:1;padding:13px;font-size:15px" onclick="doDelete('${id}')">🗑 Sil</button>
+        <button class="btn bad" style="flex:1;padding:13px;font-size:15px" onclick="doDelete('${id}','${rp}')">🗑 Sil</button>
         <button class="btn" style="flex:1;padding:13px" onclick="closeModal()">İptal</button>
       </div>
     </div>`);
   setTimeout(()=>{const el=document.getElementById("delPass");if(el)el.focus();},100);
 }
 
-function doDelete(id){
-  const entered=(document.getElementById("delPass")?.value||"").trim().toUpperCase();
-  if(entered!=="SİL"&&entered!=="SIL"){
+function doDelete(id, rp){
+  const entered=(document.getElementById("delPass")?.value||"").trim();
+  if(entered!==rp){
     const err=document.getElementById("delPassErr");
-    if(err){err.style.display="block";}
+    if(err) err.style.display="block";
     return;
   }
   closeModal(); deleteTx(id);
@@ -1963,26 +1964,27 @@ function doDelete(id){
 
 function deletePersonel(id){
   const p=state.persons.find(x=>x.id===id);
+  const rp2=getPass().split("").reverse().join("");
   openModal("Personeli Sil — Onay Gerekli",`
     <div style="padding:10px 0">
       <div style="margin-bottom:10px;font-weight:700">${p?p.ad:""}</div>
       <div style="background:rgba(230,57,70,.07);border:1.5px solid rgba(230,57,70,.2);border-radius:10px;padding:14px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:700;color:var(--bad);margin-bottom:8px">⚠️ Onaylamak için <b>SİL</b> yazın</div>
-        <input id="delPassP" placeholder="SİL yazın..." style="width:100%;font-size:16px;font-weight:700;text-align:center;letter-spacing:3px" autocomplete="off"/>
-        <div id="delPassErrP" style="color:var(--bad);font-size:12px;display:none;margin-top:5px">❌ "SİL" yazmadınız.</div>
+        <div style="font-size:12px;font-weight:700;color:var(--bad);margin-bottom:8px">🔐 Silme onayı gerekiyor</div>
+        <input type="password" id="delPassP" placeholder="Onay kodunu girin" style="width:100%;font-size:15px;text-align:center" autocomplete="off"/>
+        <div id="delPassErrP" style="color:var(--bad);font-size:12px;display:none;margin-top:5px">❌ Hatalı kod.</div>
       </div>
       <div style="display:flex;gap:10px">
-        <button class="btn bad" style="flex:1;padding:12px" onclick="doDeletePersonel('${id}')">Sil</button>
+        <button class="btn bad" style="flex:1;padding:12px" onclick="doDeletePersonel('${id}','${rp2}')">Sil</button>
         <button class="btn" style="flex:1;padding:12px" onclick="closeModal()">İptal</button>
       </div>
     </div>`);
   setTimeout(()=>{const el=document.getElementById("delPassP");if(el)el.focus();},100);
 }
-async function doDeletePersonel(id){
-  const entered=(document.getElementById("delPassP")?.value||"").trim().toUpperCase();
-  if(entered!=="SİL"&&entered!=="SIL"){
+async function doDeletePersonel(id, rp){
+  const entered=(document.getElementById("delPassP")?.value||"").trim();
+  if(entered!==rp){
     const err=document.getElementById("delPassErrP");
-    if(err){err.style.display="block";}
+    if(err) err.style.display="block";
     return;
   }
   closeModal();
