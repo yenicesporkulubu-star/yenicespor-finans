@@ -3075,7 +3075,7 @@ function iSecHepsi(v){document.querySelectorAll('.itx').forEach(c=>c.checked=v);
 document.querySelectorAll('.itx').forEach(c=>c.addEventListener('change',()=>document.getElementById('iSecLbl').textContent=document.querySelectorAll('.itx:checked').length+' işlem seçili'));
 function iStep(id,s){const e=document.getElementById(id);e.style.background=s==='done'?'#f0fdf4':s==='err'?'#fff5f5':'#fffbeb';e.style.color=s==='done'?'#10b057':s==='err'?'#e63946':'#92400e';}
 async function iSb(path,body){
-  const r=await fetch(I_SB+path,{method:'POST',headers:{'apikey':I_KEY,'Authorization':'Bearer '+I_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},body:JSON.stringify(body)});
+  const r=await fetch(I_SB+path,{method:'POST',headers:{'apikey':I_KEY,'Authorization':'Bearer '+I_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(body)});
   const txt=await r.text();if(!r.ok)throw new Error(txt);return JSON.parse(txt);
 }
 async function iAktar(){
@@ -3084,7 +3084,7 @@ async function iAktar(){
   const bar=document.getElementById('iProgBar'),pt=document.getElementById('iProgTxt'),pd=document.getElementById('iProgDet');
   try{
     iStep('is1','active');pt.textContent='Cariler oluşturuluyor...';
-    const cp=I_CARIS.map(c=>({ad:c.ad,tur:c.tur,ana_tur:c.ana_tur,aciklama:c.aciklama||null,durum:c.durum||null,hedef_tutar:c.hedef_tutar>0?c.hedef_tutar:null}));
+    const cp=I_CARIS.map(c=>({ad:c.ad,tur:c.tur,ana_tur:c.ana_tur,durum:c.durum,...(c.hedef_tutar>0?{hedef_tutar:c.hedef_tutar}:{})}));
     const cr=await iSb('/rest/v1/ys_caris',cp);
     bar.style.width='33%';iStep('is1','done');pd.textContent='✅ '+cr.length+' cari';
     const tm={};cr.forEach((x,i)=>tm[I_CARIS[i].temp_id]=x.id);
