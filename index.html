@@ -3074,39 +3074,86 @@ function ishowTab(i){
 function iSecHepsi(v){document.querySelectorAll('.itx').forEach(c=>c.checked=v);if(document.getElementById('iChkAll'))document.getElementById('iChkAll').checked=v;document.getElementById('iSecLbl').textContent=document.querySelectorAll('.itx:checked').length+' işlem seçili';}
 document.querySelectorAll('.itx').forEach(c=>c.addEventListener('change',()=>document.getElementById('iSecLbl').textContent=document.querySelectorAll('.itx:checked').length+' işlem seçili'));
 function iStep(id,s){const e=document.getElementById(id);e.style.background=s==='done'?'#f0fdf4':s==='err'?'#fff5f5':'#fffbeb';e.style.color=s==='done'?'#10b057':s==='err'?'#e63946':'#92400e';}
-async function iSb(path,body){
-  const r=await fetch(I_SB+path,{method:'POST',headers:{'apikey':I_KEY,'Authorization':'Bearer '+I_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(body)});
-  const txt=await r.text();if(!r.ok)throw new Error(txt);return JSON.parse(txt);
+const HD={'apikey':I_KEY,'Authorization':'Bearer '+I_KEY,'Content-Type':'application/json'};
+
+async function iDel(tablo){
+  // Tüm kayıtları sil (id >= 0 filtresi)
+  const r=await fetch(I_SB+'/rest/v1/'+tablo+'?id=gte.0',{method:'DELETE',headers:HD});
+  // 204 No Content de başarıdır
+  if(!r.ok && r.status!==204){const t=await r.text();throw new Error('Silme hatası ('+tablo+'): '+t);}
 }
+
+async function iPost(path,body){
+  const r=await fetch(I_SB+path,{method:'POST',headers:{...HD,'Prefer':'return=representation'},body:JSON.stringify(body)});
+  const txt=await r.text();
+  if(!r.ok) throw new Error(txt);
+  return JSON.parse(txt);
+}
+
 async function iAktar(){
   document.getElementById('iBtnGo').disabled=true;
   document.getElementById('iProgress').style.display='block';
+  document.getElementById('iResult').style.display='none';
   const bar=document.getElementById('iProgBar'),pt=document.getElementById('iProgTxt'),pd=document.getElementById('iProgDet');
   try{
-    iStep('is1','active');pt.textContent='Cariler oluşturuluyor...';
-    const cp=I_CARIS.map(c=>({ad:c.ad,tur:c.tur,ana_tur:c.ana_tur,durum:c.durum,...(c.hedef_tutar>0?{hedef_tutar:c.hedef_tutar}:{})}));
-    const cr=await iSb('/rest/v1/ys_caris',cp);
-    bar.style.width='33%';iStep('is1','done');pd.textContent='✅ '+cr.length+' cari';
-    const tm={};cr.forEach((x,i)=>tm[I_CARIS[i].temp_id]=x.id);
+    // 1. Mevcut verileri temizle
+    iStep('is1','active');pt.textContent='Mevcut veriler temizleniyor...';bar.style.width='5%';
+    await iDel('ys_transactions');
+    await iDel('ys_caris');
+    pd.textContent='✅ Temizlendi';bar.style.width='20%';
+
+    // 2. Carileri ekle — tüm objeler AYNI key sete sahip olmalı
+    pt.textContent='Cariler oluşturuluyor...';
+    const cp=I_CARIS.map(c=>({
+      ad: c.ad,
+      tur: c.tur,
+      ana_tur: c.ana_tur,
+      durum: c.durum,
+      hedef_tutar: Number(c.hedef_tutar)||0
+    }));
+    const cr=await iPost('/rest/v1/ys_caris',cp);
+    bar.style.width='40%';iStep('is1','done');pd.textContent='✅ '+cr.length+' cari eklendi';
+
+    // temp_id → gerçek id eşleştir
+    const tm={};
+    cr.forEach((x,i)=>{ if(I_CARIS[i]) tm[I_CARIS[i].temp_id]=x.id; });
+
+    // 3. İşlemleri hazırla
     iStep('is2','active');pt.textContent='İşlemler hazırlanıyor...';bar.style.width='50%';
     const sids=new Set([...document.querySelectorAll('.itx:checked')].map(c=>c.dataset.id));
     const txp=[];
     document.querySelectorAll('#iTxBody tr').forEach(row=>{
       const id=row.dataset?.id;if(!id||!sids.has(id))return;
       const orig=I_TXNS.find(t=>String(t.id)===id);if(!orig)return;
-      txp.push({tarih:row.querySelector('.f-tarih').value,aciklama:row.querySelector('.f-acik').value,tur:row.querySelector('.f-tur').value,tutar:parseFloat(row.querySelector('.f-tutar').value)||0,kasa:row.querySelector('.f-kasa').value,kategori:row.querySelector('.f-kat').value,cari_id:tm[orig.cari_temp_id]||null});
+      txp.push({
+        tarih: row.querySelector('.f-tarih').value||null,
+        aciklama: row.querySelector('.f-acik').value||'',
+        tur: row.querySelector('.f-tur').value,
+        tutar: parseFloat(row.querySelector('.f-tutar').value)||0,
+        kasa: row.querySelector('.f-kasa').value,
+        kategori: row.querySelector('.f-kat').value||'',
+        cari_id: tm[orig.cari_temp_id]||null
+      });
     });
-    iStep('is2','done');iStep('is3','active');pt.textContent='Kaydediliyor...';
+    iStep('is2','done');
+
+    // 4. İşlemleri kaydet (20'li batch)
+    iStep('is3','active');pt.textContent='İşlemler kaydediliyor...';
     let ok=0;
-    for(let i=0;i<txp.length;i+=20){await iSb('/rest/v1/ys_transactions',txp.slice(i,i+20));ok+=Math.min(20,txp.length-i);bar.style.width=Math.round(50+ok/txp.length*50)+'%';pd.textContent=ok+' / '+txp.length;}
+    for(let i=0;i<txp.length;i+=20){
+      await iPost('/rest/v1/ys_transactions',txp.slice(i,i+20));
+      ok+=Math.min(20,txp.length-i);
+      bar.style.width=Math.round(55+ok/txp.length*45)+'%';
+      pd.textContent=ok+' / '+txp.length+' işlem';
+    }
     iStep('is3','done');bar.style.width='100%';
     document.getElementById('iProgress').style.display='none';
     document.getElementById('iResult').style.display='block';
-    document.getElementById('iResult').innerHTML=`<div style="background:#f0fdf4;border:2px solid #10b057;border-radius:14px;padding:22px;text-align:center"><div style="font-size:44px;margin-bottom:8px">🎉</div><div style="font-size:20px;font-weight:900;color:#10b057;margin-bottom:6px">${cr.length} cari + ${ok} işlem aktarıldı!</div><button onclick="document.getElementById('importOverlay').style.display='none';document.body.style.overflow='';if(typeof refreshAll==='function')refreshAll();" style="background:#10b057;color:#fff;padding:11px 26px;border-radius:10px;border:none;font-weight:800;cursor:pointer;font-size:14px;margin-top:8px">⚽ Uygulamaya Dön →</button></div>`;
+    document.getElementById('iResult').innerHTML=`<div style="background:#f0fdf4;border:2px solid #10b057;border-radius:14px;padding:22px;text-align:center"><div style="font-size:44px;margin-bottom:8px">🎉</div><div style="font-size:20px;font-weight:900;color:#10b057;margin-bottom:8px">${cr.length} cari + ${ok} işlem aktarıldı!</div><button onclick="document.getElementById('importOverlay').style.display='none';document.body.style.overflow='';if(typeof refreshAll==='function')refreshAll();" style="background:#10b057;color:#fff;padding:12px 28px;border-radius:10px;border:none;font-weight:800;cursor:pointer;font-size:15px">⚽ Uygulamaya Dön →</button></div>`;
   }catch(e){
     document.getElementById('iProgress').style.display='none';
     document.getElementById('iResult').style.display='block';
-    document.getElementById('iResult').innerHTML=`<div style="background:#fff5f5;border:2px solid #e63946;border-radius:14px;padding:18px"><b>❌ Hata:</b><pre style="font-size:11px;margin-top:8px;white-space:pre-wrap">${e.message}</pre><button onclick="document.getElementById('iBtnGo').disabled=false;document.getElementById('iProgress').style.display='none';document.getElementById('iResult').style.display='none'" style="margin-top:10px;background:#e63946;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-weight:700">🔄 Tekrar Dene</button></div>`;
+    document.getElementById('iResult').innerHTML=`<div style="background:#fff5f5;border:2px solid #e63946;border-radius:14px;padding:18px"><b>❌ Hata:</b><pre style="font-size:11px;margin-top:8px;white-space:pre-wrap">${e.message}</pre><button onclick="document.getElementById('iBtnGo').disabled=false;document.getElementById('iResult').style.display='none'" style="margin-top:10px;background:#e63946;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;font-weight:700">🔄 Tekrar Dene</button></div>`;
   }
 }
 </script>
