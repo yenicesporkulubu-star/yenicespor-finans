@@ -44,7 +44,7 @@ html{scroll-behavior:smooth}
 body{font-family:'DM Sans',sans-serif;font-size:14px;background:var(--bg);color:var(--text);min-height:100vh}
 
 /* ══════════════════ HEADER ══════════════════ */
-header{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.97);backdrop-filter:blur(20px);border-bottom:1.5px solid var(--border)}
+header{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.97);backdrop-filter:blur(20px);border-bottom:1.5px solid var(--border);padding-top:env(safe-area-inset-top, 0px)}
 .header-inner{max-width:1360px;margin:0 auto;padding:10px 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .logo{font-weight:800;font-size:18px;color:var(--accent);display:flex;align-items:center;gap:8px;letter-spacing:-.3px}
 .logo-badge{font-size:10px;background:var(--accent);color:#fff;padding:2px 7px;border-radius:4px;font-weight:700;letter-spacing:.3px}
@@ -619,7 +619,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
       <div class="field" style="grid-column:1/-1"><label>Cari</label><select id="fCari"></select></div>
       <div class="field"><label>Kasa / Ödeme</label><select id="fKasa"></select></div>
       <div class="field"><label>Tutar (₺)</label>
-        <input id="fAmt" inputmode="decimal" placeholder="0" style="font-size:24px;font-weight:800;padding:13px"/>
+        <input id="fAmt" inputmode="decimal" placeholder="0" style="font-size:24px;font-weight:800;padding:13px" oninput="formatAmtInput(this)"/>
       </div>
       <div class="field" style="grid-column:1/-1"><label>Açıklama</label><input id="fDesc" placeholder="Açıklama..."/></div>
       <div class="field"><label>Ürün (opsiyonel)</label><input id="fItem" placeholder="Ürün adı"/></div>
@@ -797,7 +797,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
     </div>
     <div class="field" style="margin-bottom:12px">
       <label>Tutar (₺)</label>
-      <input type="number" id="ktTutar" placeholder="0" inputmode="decimal" style="font-size:22px;font-weight:800;padding:12px"/>
+      <input type="text" id="ktTutar" placeholder="0" inputmode="decimal" style="font-size:22px;font-weight:800;padding:12px" oninput="formatAmtInput(this)"/>
     </div>
     <div class="field" style="margin-bottom:16px">
       <label>Açıklama (opsiyonel)</label>
@@ -835,7 +835,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
     <input type="hidden" id="bdTip" value="gelir"/>
     <div class="field" style="margin-bottom:12px">
       <label>Tutar (₺)</label>
-      <input type="number" id="bdTutar" placeholder="0" inputmode="decimal" style="font-size:22px;font-weight:800;padding:12px"/>
+      <input type="text" id="bdTutar" placeholder="0" inputmode="decimal" style="font-size:22px;font-weight:800;padding:12px" oninput="formatAmtInput(this)"/>
     </div>
     <div class="field" style="margin-bottom:16px">
       <label>Açıklama</label>
@@ -3088,7 +3088,19 @@ document.getElementById("tahBaslangic").value=todayStr().slice(0,7);
 document.getElementById("tahBitis").value=todayStr().slice(0,7);
 
 /* ═══ FORM ═══ */
-function setTxTur(tur){
+function formatAmtInput(el){
+  // İmlec pozisyonunu koru
+  const raw=el.value.replace(/\./g,"").replace(",",".");
+  const num=raw.replace(/[^0-9,]/g,"");
+  // Binlik ayırıcı ekle
+  const parts=num.split(",");
+  parts[0]=parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,".");
+  el.value=parts.join(",");
+}
+function parseAmtInput(id){
+  const v=(document.getElementById(id).value||"0").replace(/\./g,"").replace(",",".");
+  return parseFloat(v)||0;
+}
   document.getElementById("fType").value=tur;
   document.getElementById("btnGelir").classList.toggle("active",tur==="GELİR");
   document.getElementById("btnGider").classList.toggle("active",tur==="GİDER");
@@ -3153,7 +3165,7 @@ document.getElementById("btnSaveTx").onclick=async()=>{
   const aciklama=document.getElementById("fDesc").value.trim();
   const urun=(document.getElementById("fItem")?.value||"").trim();
   const adet=Number(document.getElementById("fQty")?.value||0)||0;
-  const tutar=Number(String(document.getElementById("fAmt").value).replaceAll(".","").replaceAll(",","."))||0;
+  const tutar=parseAmtInput("fAmt");
   const kasa=document.getElementById("fKasa").value;
   const vade=document.getElementById("fVade")?.value||"";
   if(!cari_id) return toast("Cari seç!","err");
@@ -3324,7 +3336,7 @@ async function kaydetKasaTransfer(){
   const tarih=document.getElementById("ktDate").value;
   const kaynak=document.getElementById("ktKaynakKasa").value;
   const hedef=document.getElementById("ktHedefKasa").value;
-  const tutar=parseFloat(document.getElementById("ktTutar").value)||0;
+  const tutar=parseAmtInput("ktTutar");
   const aciklama=document.getElementById("ktAciklama").value.trim()||`${kaynak} → ${hedef} transfer`;
   const hataEl=document.getElementById("ktHata");
   if(!tarih||tutar<=0){hataEl.textContent="Tarih ve tutar zorunlu.";hataEl.style.display="block";return;}
@@ -3374,7 +3386,7 @@ async function kaydetBakiyeDuzelt(){
   const tarih=document.getElementById("bdDate").value;
   const kasa=document.getElementById("bdKasa").value;
   const tip=document.getElementById("bdTip").value;
-  const tutar=parseFloat(document.getElementById("bdTutar").value)||0;
+  const tutar=parseAmtInput("bdTutar");
   const aciklama=document.getElementById("bdAciklama").value.trim()||"Bakiye düzeltmesi";
   const hataEl=document.getElementById("bdHata");
   if(!tarih||tutar<=0){hataEl.textContent="Tarih ve tutar zorunlu.";hataEl.style.display="block";return;}
