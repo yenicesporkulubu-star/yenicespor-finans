@@ -3296,6 +3296,28 @@ function openKasaTransfer(){
   document.getElementById("ktTutar").value="";
   document.getElementById("ktAciklama").value="";
   document.getElementById("ktHata").style.display="none";
+  // Bakiyeleri hesapla
+  const kasaG2={},kasaD2={};
+  for(const t of state.transactions){
+    if((t.kategori||"").toLowerCase().includes("tahakkuk")) continue;
+    const v=Number(t.tutar)||0,k=t.kasa||"DİĞER";
+    if(!kasaG2[k]){kasaG2[k]=0;kasaD2[k]=0;}
+    if(t.tur==="GELİR")kasaG2[k]+=v;else kasaD2[k]+=v;
+  }
+  const kasaList=["NAKİT","BANKA","ALTIN","ÇEK","SENET","DİĞER"];
+  const kasaOpts=kasaList.map(k=>{
+    const b=(kasaG2[k]||0)-(kasaD2[k]||0);
+    const ic={NAKİT:"💵",BANKA:"🏦",ALTIN:"🪙",ÇEK:"📄",SENET:"📜",DİĞER:"💳"}[k]||"💳";
+    return `<option value="${k}">${ic} ${k} — ${fmt(b)} ₺</option>`;
+  }).join("");
+  document.getElementById("ktKaynakKasa").innerHTML=kasaOpts;
+  // Hedef için farklı sıra
+  const hedefOpts=["BANKA","NAKİT","ALTIN","ÇEK","SENET","DİĞER"].map(k=>{
+    const b=(kasaG2[k]||0)-(kasaD2[k]||0);
+    const ic={NAKİT:"💵",BANKA:"🏦",ALTIN:"🪙",ÇEK:"📄",SENET:"📜",DİĞER:"💳"}[k]||"💳";
+    return `<option value="${k}">${ic} ${k} — ${fmt(b)} ₺</option>`;
+  }).join("");
+  document.getElementById("ktHedefKasa").innerHTML=hedefOpts;
   document.getElementById("kasaTransferModal").style.display="flex";
 }
 async function kaydetKasaTransfer(){
@@ -3326,6 +3348,20 @@ function openBakiyeDuzelt(){
   document.getElementById("bdAciklama").value="";
   document.getElementById("bdHata").style.display="none";
   setBdTip("gelir");
+  // Bakiyeleri hesapla
+  const kasaG2={},kasaD2={};
+  for(const t of state.transactions){
+    if((t.kategori||"").toLowerCase().includes("tahakkuk")) continue;
+    const v=Number(t.tutar)||0,k=t.kasa||"DİĞER";
+    if(!kasaG2[k]){kasaG2[k]=0;kasaD2[k]=0;}
+    if(t.tur==="GELİR")kasaG2[k]+=v;else kasaD2[k]+=v;
+  }
+  const kasaList=["NAKİT","BANKA","ALTIN","ÇEK","SENET","DİĞER"];
+  const ic={NAKİT:"💵",BANKA:"🏦",ALTIN:"🪙",ÇEK:"📄",SENET:"📜",DİĞER:"💳"};
+  document.getElementById("bdKasa").innerHTML=kasaList.map(k=>{
+    const b=(kasaG2[k]||0)-(kasaD2[k]||0);
+    return `<option value="${k}">${ic[k]||"💳"} ${k} — ${fmt(b)} ₺</option>`;
+  }).join("");
   document.getElementById("bakiyeDuzeltModal").style.display="flex";
 }
 function setBdTip(tip){
