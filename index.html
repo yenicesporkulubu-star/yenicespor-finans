@@ -3101,7 +3101,7 @@ function parseAmtInput(id){
   const v=(document.getElementById(id).value||"0").replace(/\./g,"").replace(",",".");
   return parseFloat(v)||0;
 }
-  document.getElementById("fType").value=tur;
+function setTxTur(tur){
   document.getElementById("btnGelir").classList.toggle("active",tur==="GELİR");
   document.getElementById("btnGider").classList.toggle("active",tur==="GİDER");
   const amt=document.getElementById("fAmt");
