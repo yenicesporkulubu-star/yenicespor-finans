@@ -1,13 +1,70 @@
 const fs = require('fs');
+const {execSync} = require('child_process');
 const html = fs.readFileSync('./index.html', 'utf8');
 
 const errors = [];
 const warnings = [];
 
-// 1. JS parantez dengesi
-let open=0, close=0;
-for(const c of html){ if(c==='{') open++; else if(c==='}') close++; }
-if(open!==close) errors.push(`Süslü parantez dengesi bozuk: { ${open} } ${close} fark: ${open-close}`);
+// ── REGRESYON KONTROLÜ: Önceki commit'te olan şeyler hâlâ var mı? ──
+try {
+  const prev = execSync('git show HEAD:index.html 2>/dev/null', {encoding:'utf8'});
+
+  // Kritik id'ler eksildi mi?
+  const prevIds = new Set([...prev.matchAll(/id="([^"]+)"/g)].map(m=>m[1]));
+  const currIds = new Set([...html.matchAll(/id="([^"]+)"/g)].map(m=>m[1]));
+  const kritikPrefixler = ['tab-','kpi','kasa','mhSek-','mh-tab-'];
+  for(const id of prevIds){
+    if(!currIds.has(id) && kritikPrefixler.some(p=>id.startsWith(p))){
+      errors.push(`REGRESYON: id="${id}" önceki sürümde vardı, şimdi yok`);
+    }
+  }
+
+  // Kritik fonksiyonlar silindi mi?
+  const prevFns = new Set([...prev.matchAll(/function ([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g)].map(m=>m[1]));
+  const currFns = new Set([...html.matchAll(/function ([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g)].map(m=>m[1]));
+  const kritikFnler = ['renderDashboard','renderKasaTx','renderVarliklar',
+    'loadAll','showTab','saveTx','loadSozlesmeler','renderButce','loadMuhasebe',
+    'hesaplaKasaBakiyeleri','renderGelirTablosuMh','renderBilancoMh','renderMizan',
+    'renderYevmiye','showAlacakDetay','showBorcDetay'];
+  for(const fn of kritikFnler){
+    if(prevFns.has(fn) && !currFns.has(fn)){
+      errors.push(`REGRESYON: function ${fn}() silindi`);
+    }
+  }
+
+  // Nav sekmeleri eksildi mi?
+  const prevTabs = [...prev.matchAll(/data-tab="([^"]+)"/g)].map(m=>m[1]);
+  const currTabs = new Set([...html.matchAll(/data-tab="([^"]+)"/g)].map(m=>m[1]));
+  for(const tab of prevTabs){
+    if(!currTabs.has(tab)) errors.push(`REGRESYON: data-tab="${tab}" silindi`);
+  }
+
+  // Modallar eksildi mi?
+  const prevModals = [...prev.matchAll(/id="([^"]+Modal)"/g)].map(m=>m[1]);
+  const currModals = new Set([...html.matchAll(/id="([^"]+Modal)"/g)].map(m=>m[1]));
+  for(const m of prevModals){
+    if(!currModals.has(m)) errors.push(`REGRESYON: Modal id="${m}" silindi`);
+  }
+
+} catch(e) { /* ilk commit */ }
+
+// 1. JS syntax kontrolü — node ile parse et
+const scriptStart = html.lastIndexOf('<script>');
+const scriptEnd = html.lastIndexOf('</script>');
+if(scriptStart > -1 && scriptEnd > scriptStart){
+  const jsContent = html.slice(scriptStart + 8, scriptEnd);
+  const tmpFile = '/tmp/ys_check_' + Date.now() + '.js';
+  fs.writeFileSync(tmpFile, jsContent);
+  try {
+    execSync(`node --check ${tmpFile} 2>&1`, {encoding:'utf8'});
+    fs.unlinkSync(tmpFile);
+  } catch(e) {
+    fs.unlinkSync(tmpFile);
+    const msg = (e.stdout||e.message||'').split('\n').filter(l=>l.trim()).slice(0,3).join(' | ');
+    errors.push('JS SYNTAX HATASI: ' + msg);
+  }
+}
+
 
 // 2. onclick/getElementById null riski — element HTML'de yoksa JS'de .onclick atama
 // istisna: dinamik olarak openModal() içinde oluşturulan elementler (impGo vb.)
