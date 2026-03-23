@@ -477,7 +477,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
   <nav>
     <button class="navbtn active" data-tab="dashboard">📊 Özet</button>
     <button class="navbtn" data-tab="txn">➕ İşlem</button>
-    <button class="navbtn" data-tab="caris">👥 Cariler</button>
+    <button class="navbtn" data-tab="caris">👥 Gelirler</button>
     <button class="navbtn" data-tab="tahakkuk">📅 Tahakkuk</button>
     <button class="navbtn" data-tab="kasa">🏦 Kasa</button>
     <button class="navbtn" data-tab="butce">🎯 Bütçe</button>
@@ -7062,6 +7062,34 @@ async function iAktar(){
   }
 }
 </script>
+<script>
+/* === CARİ → GELİR OTOMATİK DÖNÜŞÜM === */
+(function () {
+  function degistir() {
+    document.querySelectorAll("*").forEach(el => {
+      if (el.childNodes.length === 1 && el.childNodes[0].nodeType === 3) {
+        let t = el.textContent;
 
+        if (t.includes("Cariler")) el.textContent = t.replaceAll("Cariler", "Gelirler");
+        if (t.includes("Cari")) el.textContent = t.replaceAll("Cari", "Gelir");
+        if (t.includes("Yeni Cari")) el.textContent = t.replaceAll("Yeni Cari", "Gelir");
+      }
+    });
+
+    document.querySelectorAll("input").forEach(inp => {
+      if (inp.placeholder && inp.placeholder.includes("Cari")) {
+        inp.placeholder = "Aidat, Bağış, Sponsorluk...";
+      }
+    });
+  }
+
+  // İlk çalıştır
+  degistir();
+
+  // Dinamik yüklenenler için tekrar çalıştır
+  setTimeout(degistir, 500);
+  setTimeout(degistir, 1500);
+})();
+</script>
 </body>
 </html>
