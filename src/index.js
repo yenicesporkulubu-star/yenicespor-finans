@@ -1,17 +1,19 @@
 /**
  * YENİCESPOR FİNANS — Cloudflare Worker
  * Rotalar:
- *   GET  /whatsapp  → Meta webhook doğrulama
- *   POST /whatsapp  → WhatsApp mesaj işleme
- *   *               → Statik varlıklar (index.html vb.)
+ *   GET  /whatsapp        → Meta webhook doğrulama
+ *   POST /whatsapp        → WhatsApp mesaj işleme
+ *   POST /telegram        → Telegram bot webhook
+ *   GET  /telegram/set    → Telegram webhook kayıt (bir kez çalıştır)
+ *   *                     → Statik varlıklar (index.html vb.)
  */
 
 // ─── Sabitler ────────────────────────────────────────────────────────────────
 const SB_URL  = "https://vkyqbjddiayxpfeeqkjz.supabase.co";
 const TABLES  = { TX: "ys_transactions", CARIS: "ys_caris", LOGS: "ys_wa_logs" };
 
-const FALLBACK = { GELIR: "c_muhtelif_gelir", GIDER: "c_muhtelif_gider" };
-const FALLBACK_AD = { GELIR: "Muhtelif Gelir",  GIDER: "Muhtelif Gider" };
+const FALLBACK    = { GELIR: "c_muhtelif_gelir", GIDER: "c_muhtelif_gider" };
+const FALLBACK_AD = { GELIR: "Muhtelif Gelir",   GIDER: "Muhtelif Gider" };
 
 // Tahsilat / ödeme kelime eşleştirme
 const GELIR_KW = /tahsilat|tahsil|gelir|aldık|alındı|ödedi|gönderdi|yatırdı/i;
@@ -33,7 +35,16 @@ export default {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
-    // Diğer her şey → statik dosya (index.html)
+    if (url.pathname === "/telegram") {
+      if (request.method === "POST") return handleTelegram(request, env);
+      return new Response("OK", { status: 200 });
+    }
+
+    // Telegram webhook'u kaydet (bir kez tarayıcıdan aç)
+    if (url.pathname === "/telegram/set") {
+      return registerTelegramWebhook(request, env);
+    }
+
     return env.ASSETS.fetch(request);
   }
 };
@@ -354,4 +365,121 @@ async function verifySignature(request, body, secret) {
     const expected = request.headers.get("x-hub-signature-256") || "";
     return hex === expected;
   } catch { return false; }
+}
+
+// ─── Telegram Handler ─────────────────────────────────────────────────────────
+async function handleTelegram(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return new Response("OK"); }
+
+  const msg = body.message || body.edited_message;
+  if (!msg || !msg.text) return new Response("OK");
+
+  const chatId   = msg.chat.id;
+  const fromName = msg.from?.first_name || msg.from?.username || String(msg.from?.id);
+  const metin    = msg.text.trim();
+  const msgId    = String(msg.message_id) + "_" + String(chatId);
+  const tarih    = new Date(msg.date * 1000).toISOString().slice(0, 10);
+  const sbKey    = env.SUPABASE_KEY || env.SUPABASE_ANON_KEY;
+  const tgToken  = env.TELEGRAM_TOKEN;
+
+  // /yardim komutu
+  if (metin.startsWith("/") || metin === "/start" || metin.toLowerCase() === "yardım") {
+    await tgSend(tgToken, chatId,
+      "💰 *Yenicespor Finans Bot*\n\n" +
+      "Şu formatlarda mesaj gönder:\n\n" +
+      "`Ali 5000 tahsilat`\n" +
+      "`Veli 2000 ödeme banka`\n" +
+      "`Turan Metal 50000 gelir`\n" +
+      "`ABC Şirketi 12500 ödeme kasa`\n\n" +
+      "✅ İşlem otomatik oluşturulur."
+    );
+    return new Response("OK");
+  }
+
+  // Duplicate kontrolü
+  const dup = await sbGet(sbKey, TABLES.LOGS, `msg_id=eq.${msgId}&select=id`);
+  if (dup?.length > 0) return new Response("OK");
+
+  // Parse
+  const parsed = parseMessage(metin);
+  if (!parsed) {
+    await logWA(sbKey, { msg_id: msgId, gonderen: String(chatId), gonderen_ad: fromName,
+      metin, durum: "parse_hatası", hata: "İşlem tipi veya tutar çıkarılamadı", tarih });
+    await tgSend(tgToken, chatId,
+      "❓ Anlaşılamadı.\n\nFormat: `Cari 5000 tahsilat` veya `Cari 2000 ödeme`");
+    return new Response("OK");
+  }
+
+  const { cariAd, tutar, tur, kasa } = parsed;
+  const { cariId, cariAdFinal, yeniCari } = await bulVeyaOlusturCari(sbKey, cariAd, tur);
+  const tahakkukVar = await kontrolTahakkuk(sbKey, cariId, tur);
+
+  const txId = crypto.randomUUID();
+  const tx = {
+    id: txId, tarih,
+    tur: tur === "GELIR" ? "GELİR" : "GİDER",
+    tutar, kasa,
+    cari_id: cariId,
+    aciklama: metin,
+    kategori: tur === "GELIR" ? "Diğer Gelir" : "Diğer Gider",
+    kaynak: "telegram"
+  };
+
+  let hata = null;
+  try { await sbPost(sbKey, TABLES.TX, tx); }
+  catch(e) { hata = e.message; }
+
+  await logWA(sbKey, {
+    msg_id: msgId, gonderen: String(chatId), gonderen_ad: fromName,
+    metin, durum: hata ? "tx_hatası" : "işlendi", hata,
+    cari_id: cariId, cari_ad: cariAdFinal, tutar, islem_tipi: tur, kasa,
+    tx_id: hata ? null : txId, yeni_cari: yeniCari, tarih
+  });
+
+  if (hata) {
+    await tgSend(tgToken, chatId, "❌ Kayıt hatası: " + hata);
+  } else {
+    const turEmoji = tur === "GELIR" ? "💰" : "💸";
+    const yeniMsg  = yeniCari ? " _(yeni cari oluşturuldu)_" : "";
+    const tahMsg   = tahakkukVar ? "" : "\n⚠️ _Tahakkuk kaydı bulunamadı_";
+    await tgSend(tgToken, chatId,
+      `${turEmoji} *İşlem Kaydedildi*\n\n` +
+      `👤 Cari: *${cariAdFinal}*${yeniMsg}\n` +
+      `💵 Tutar: *${tutar.toLocaleString("tr-TR")} ₺*\n` +
+      `🏦 Kasa: ${kasa}\n` +
+      `📅 Tarih: ${tarih}` +
+      tahMsg
+    );
+  }
+
+  return new Response("OK");
+}
+
+// ─── Telegram Webhook Kayıt ───────────────────────────────────────────────────
+async function registerTelegramWebhook(request, env) {
+  const token = env.TELEGRAM_TOKEN;
+  if (!token) return new Response("TELEGRAM_TOKEN eksik", { status: 500 });
+
+  const webhookUrl = new URL(request.url).origin + "/telegram";
+  const r = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: webhookUrl, allowed_updates: ["message"] })
+  });
+  const result = await r.json();
+  return new Response(JSON.stringify(result, null, 2), {
+    headers: { "Content-Type": "application/json" }
+  });
+}
+
+// ─── Telegram Mesaj Gönder ────────────────────────────────────────────────────
+async function tgSend(token, chatId, text) {
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "Markdown" })
+    });
+  } catch(e) { console.error("tgSend hata:", e.message); }
 }
