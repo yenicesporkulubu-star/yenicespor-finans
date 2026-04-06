@@ -301,6 +301,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
 #voiceBtn{position:fixed;right:18px;bottom:18px;width:56px;height:56px;border-radius:50%;background:var(--accent);border:none;color:#fff;font-size:22px;cursor:pointer;z-index:200;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(13,92,56,.45);transition:all .2s}
 #voiceBtn:hover{transform:scale(1.08)}
 #voiceBtn.listening{background:var(--bad);animation:blink .8s infinite}
+#waBtnFloat:hover{transform:scale(1.08)}
 
 /* ══════════════════ RESPONSIVE ══════════════════ */
 @media(max-width:600px){
@@ -1911,6 +1912,48 @@ style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1
 <!-- ══════ VOICE ══════ -->
 <button id="voiceBtn" title="Sesle İşlem">🎤</button>
 
+<!-- WhatsApp Hızlı Giriş Butonu -->
+<button id="waBtnFloat" onclick="waModalAc()" title="WhatsApp Yapıştır"
+  style="position:fixed;left:18px;bottom:18px;width:56px;height:56px;border-radius:50%;background:#25d366;border:none;color:#fff;font-size:26px;cursor:pointer;z-index:200;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 24px rgba(37,211,102,.5);transition:all .2s">
+  💬
+</button>
+
+<!-- WhatsApp Hızlı Giriş Modal -->
+<div id="waHizliModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:999;align-items:flex-end;justify-content:center;backdrop-filter:blur(3px)">
+  <div style="background:var(--card);border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:92vh;overflow-y:auto;padding:20px;box-sizing:border-box">
+
+    <!-- Başlık -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:24px">💬</span>
+        <div>
+          <div style="font-size:16px;font-weight:800">WhatsApp Girişi</div>
+          <div style="font-size:11px;color:var(--muted)">Yapıştır → Onayla → Bitti</div>
+        </div>
+      </div>
+      <button onclick="waModalKapat()" style="border:none;background:var(--bg2);border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:var(--muted)">✕</button>
+    </div>
+
+    <!-- Yapıştır Alanı -->
+    <div id="waGirisEkran">
+      <textarea id="waHizliArea" rows="5"
+        placeholder="WhatsApp'tan kopyala, buraya yapıştır...
+
+Örnekler:
+Ercan Alaylı 60000 aidat
+Turan Metal 50000 sponsor
+Hamza Türkmen 100000 ödeme
+Ali 5000 tahsilat banka"
+        oninput="waHizliAyristir()"
+        style="width:100%;box-sizing:border-box;padding:14px;border-radius:12px;border:2px solid var(--border);background:var(--bg2);color:var(--text);font-size:14px;font-family:inherit;resize:none;line-height:1.5"
+      ></textarea>
+      <div id="waHizliSonuc" style="margin-top:10px;display:none"></div>
+    </div>
+
+  </div>
+</div>
+
+
 <!-- ══════ ARAMA ══════ -->
 <div class="modal" id="searchModal">
   <div class="modal-box" style="max-width:600px">
@@ -2578,8 +2621,119 @@ function renderGelirGiderBlok(aralik){
 }
 
 /* ═══════════════════════════════════════════
-   WHATSAPP METİN PARSE + ONAY KUYRUĞU
+   WHATSAPP HIZLI GİRİŞ MODAL
    ═══════════════════════════════════════════ */
+function waModalAc(){
+  document.getElementById("waHizliModal").style.display="flex";
+  document.getElementById("waHizliArea").value="";
+  document.getElementById("waHizliSonuc").style.display="none";
+  setTimeout(()=>document.getElementById("waHizliArea").focus(),100);
+}
+
+function waModalKapat(){
+  document.getElementById("waHizliModal").style.display="none";
+}
+
+// Modal dışına tıklayınca kapat
+document.addEventListener("click", e=>{
+  const modal=document.getElementById("waHizliModal");
+  if(modal&&e.target===modal) waModalKapat();
+});
+
+let _waHizliParsed=[];
+
+function waHizliAyristir(){
+  const metin=document.getElementById("waHizliArea")?.value||"";
+  const satirlar=metin.split("\n").filter(s=>s.trim().length>3);
+  _waHizliParsed=[];
+  for(const s of satirlar){
+    const p=waParseSatir(s);
+    if(p) _waHizliParsed.push(p);
+  }
+
+  const el=document.getElementById("waHizliSonuc");
+  if(!_waHizliParsed.length){el.style.display="none";return;}
+  el.style.display="block";
+
+  el.innerHTML=`<div style="display:flex;flex-direction:column;gap:8px">
+    ${_waHizliParsed.map((p,i)=>waHizliKart(p,i)).join("")}
+    <button onclick="waHizliTumunuGonder()" style="width:100%;padding:14px;border-radius:12px;border:none;background:#25d366;color:#fff;font-size:15px;font-weight:800;cursor:pointer;margin-top:4px">
+      ✅ ${_waHizliParsed.length} İşlemi Onaya Gönder
+    </button>
+  </div>`;
+}
+
+function waHizliKart(p, i){
+  const isGelir=p.tur==="GELİR";
+  const renk=isGelir?"#10b057":"#e63946";
+  const bg=isGelir?"rgba(16,176,87,.08)":"rgba(230,57,70,.06)";
+
+  // AI yorum
+  let aiYorum="";
+  if(!p.cariId) aiYorum=`<div style="font-size:10px;color:#f59e0b;margin-top:3px">⚠️ Yeni cari oluşturulacak: <b>${p.cariAd}</b></div>`;
+  else aiYorum=`<div style="font-size:10px;color:#10b057;margin-top:3px">✅ Cari eşleşti: <b>${p.cariAdFinal}</b></div>`;
+
+  const kasalar=["NAKİT","BANKA","GAYRİRESMİ BANKA"];
+
+  return `<div style="background:${bg};border:1.5px solid ${renk}30;border-radius:12px;padding:12px 14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
+          <span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:5px;background:${isGelir?"rgba(16,176,87,.15)":"rgba(230,57,70,.12)"};color:${renk}">${p.tur}</span>
+          <!-- Kasa seçici -->
+          <div style="display:flex;gap:4px">
+            ${kasalar.map(k=>`<button onclick="waHizliKasaDegis(${i},'${k}')" style="padding:2px 7px;border-radius:5px;border:1.5px solid ${p.kasa===k?renk:"var(--border)"};background:${p.kasa===k?renk+"20":"var(--bg2)"};color:${p.kasa===k?renk:"var(--muted)"};font-size:10px;font-weight:700;cursor:pointer">${k==="NAKİT"?"💵":k==="BANKA"?"🏦":"💴"} ${k==="GAYRİRESMİ BANKA"?"G.BNK":k}</button>`).join("")}
+          </div>
+        </div>
+        <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.orijinal}</div>
+        ${aiYorum}
+      </div>
+      <div style="font-size:22px;font-weight:900;color:${renk};white-space:nowrap">${fmt(p.tutar)} ₺</div>
+    </div>
+  </div>`;
+}
+
+function waHizliKasaDegis(i, kasa){
+  if(_waHizliParsed[i]) _waHizliParsed[i].kasa=kasa;
+  waHizliAyristir();
+  // Textarea'yı koru
+  const area=document.getElementById("waHizliArea");
+  if(area) area.value=_waHizliParsed.map(p=>p.orijinal).join("\n");
+}
+
+async function waHizliTumunuGonder(){
+  if(!_waHizliParsed.length) return;
+  let ok=0;
+  for(const p of _waHizliParsed){
+    const draft={
+      id:"draft_"+crypto.randomUUID(),
+      kaynak:"whatsapp",
+      cari_id:p.cariId||null,
+      cari_ad:p.cariAdFinal,
+      islem_tipi:p.tur,
+      tutar:p.tutar,
+      kasa:p.kasa,
+      aciklama:p.orijinal,
+      tarih:todayStr(),
+      kategori:p.kategori,
+      durum:"bekliyor",
+      created_at:new Date().toISOString()
+    };
+    try{
+      await sb.post("ys_drafts",draft);
+      state.drafts.unshift(draft);
+      ok++;
+    }catch(e){console.warn(e);}
+  }
+  waModalKapat();
+  _waHizliParsed=[];
+  updateOnayBadge();
+  renderOnayKuyrugu();
+  toast(`✅ ${ok} işlem onay kuyruğuna eklendi`,"ok");
+  showTab("onay");
+}
+
+
 const WA_GELIR_KW=/tahsilat|tahsil|gelir|aldık|alındı|ödedi|yatırdı|aidat|katkı|sponsor|bağış/i;
 const WA_GIDER_KW=/ödeme|ödendi|gider|verdik|masraf|harcama|maaş|ucret|ücret/i;
 const WA_BANKA_KW=/banka|havale|eft|fast|transfer/i;
