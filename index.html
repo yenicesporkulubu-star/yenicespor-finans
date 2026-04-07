@@ -720,6 +720,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
         <div style="font-size:11px;color:var(--muted);margin-top:2px">Kişi başı 2.400 ₺/yıl · Tahakkuk vs Tahsilat</div>
       </div>
       <div id="uyeAidatOzetBar" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+      <button onclick="uyeAidatTahakkukManuel()" class="btn" style="background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.4);color:#92400e;font-weight:700">📋 Bu Yıl Tahakkuk Oluştur</button>
     </div>
     <div id="uyeAidatListesi"></div>
   </div>
@@ -3992,7 +3993,7 @@ function openDetay(type){
       const tip=s.tip||"Diğer";
       if(!tipMap[tip]){tipMap[tip]={toplam:0,rows:[]};}
       tipMap[tip].toplam+=kalan;
-      tipMap[tip].rows.push({ad:s.ad,toplam,odenen,kalan});
+      tipMap[tip].rows.push({ad:s.ad,cid:cid,toplam,odenen,kalan});
     }
     // Taksit tablosu
     const bugun=todayStr();
@@ -4008,7 +4009,7 @@ function openDetay(type){
     for(const [tip,{toplam,rows}] of Object.entries(tipMap).sort((a,b)=>b[1].toplam-a[1].toplam)){
       borcHTML+=`<div style="font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;margin:12px 0 6px">${TIP_IKON[tip]||"📄"} ${tip} — ${fmt(toplam)} ₺</div>`;
       borcHTML+='<div class="tbl-wrap"><table><thead><tr><th>Ad</th><th class="right">Toplam</th><th class="right">Ödenen</th><th class="right" style="color:#e63946">Kalan</th></tr></thead><tbody>';
-      borcHTML+=rows.map(r=>`<tr><td style="font-weight:600;font-size:12px">${r.ad}</td><td class="right" style="font-size:12px">${fmt(r.toplam)} ₺</td><td class="right" style="font-size:12px;color:#10b057">${fmt(r.odenen)} ₺</td><td class="right" style="font-weight:800;color:#e63946">${fmt(r.kalan)} ₺</td></tr>`).join("");
+      borcHTML+=rows.map(r=>`<tr style="cursor:pointer" onclick="closeModal();openCariDetay('${r.cid}')"><td style="font-weight:600;font-size:12px">${r.ad} <span style="font-size:10px;color:var(--muted)">→</span></td><td class="right" style="font-size:12px">${fmt(r.toplam)} ₺</td><td class="right" style="font-size:12px;color:#10b057">${fmt(r.odenen)} ₺</td><td class="right" style="font-weight:800;color:#e63946">${fmt(r.kalan)} ₺</td></tr>`).join("");
       borcHTML+='</tbody></table></div>';
     }
 
@@ -9708,6 +9709,93 @@ function renderGelirHesaplar(){
   }).join("");
 }
 
+/* ═══════════════════════════════════════════
+   ÜYE AİDAT YILLIK TAHAKKUK SİSTEMİ
+   Her yıl 1 Ocak'ta otomatik çalışır
+   ═══════════════════════════════════════════ */
+async function uyeAidatTahakkukOlustur(tutar, yil){
+  // Üye carilar
+  const uyeler=allCaris().filter(c=>{
+    const id=(c.id||"").toLowerCase();
+    const tur=(c.tur||"").toLowerCase();
+    return id.startsWith("uye_")||tur.includes("üye")||tur.includes("aidat");
+  });
+  if(!uyeler.length){toast("Üye carisi bulunamadı","warn");return;}
+
+  const bas=`${yil}-01-01`;
+  const bit=`${yil}-12-31`;
+
+  // Zaten bu yıl tahakkuk var mı?
+  const mevcutIds=new Set(
+    state.transactions
+      .filter(t=>t.tarih&&t.tarih.startsWith(String(yil))&&(t.kategori||"").toLowerCase().includes("aidat")&&(t.kategori||"").toLowerCase().includes("tahakkuk"))
+      .map(t=>t.cari_temp_id||t.cari_id)
+  );
+  const draftIds=new Set(
+    (state.drafts||[])
+      .filter(d=>d.tarih&&d.tarih.startsWith(String(yil))&&(d.kategori||"").toLowerCase().includes("aidat"))
+      .map(d=>d.cari_id)
+  );
+
+  let eklenen=0, atlanan=0;
+  for(const u of uyeler){
+    if(mevcutIds.has(u.id)||draftIds.has(u.id)){atlanan++;continue;}
+    const draft={
+      id:"draft_"+crypto.randomUUID(),
+      kaynak:"yillik_aidat_tahakkuk",
+      cari_id:u.id,
+      cari_ad:u.ad,
+      islem_tipi:"GELİR",
+      tutar:tutar||2400,
+      kasa:"NAKİT",
+      aciklama:`${u.ad} — ${yil} Yıllık Üye Aidatı`,
+      tarih:bas,
+      kategori:"Üye Aidatı Tahakkuku",
+      vade:bit,
+      durum:"bekliyor",
+      created_at:new Date().toISOString()
+    };
+    try{
+      await sb.post("ys_drafts",draft);
+      state.drafts.unshift(draft);
+      eklenen++;
+    }catch(e){console.warn(e);}
+  }
+  updateOnayBadge();
+  renderUyeAidatlari();
+  if(eklenen>0){
+    toast(`✅ ${eklenen} üye için ${yil} yılı aidat tahakkuku oluşturuldu`,"ok");
+    showTab("onay");
+  } else {
+    toast(`${yil} yılı aidat tahakkuku zaten mevcut (${atlanan} üye)`,"warn");
+  }
+}
+
+// Yıl başı kontrolü — her loadAll'da çalışır
+function uyeAidatTahakkukManuel(){
+  const yil=new Date().getFullYear();
+  const tutar=prompt(`${yil} yılı üye aidat tahakkuku\nKişi başı tutar (₺):`, "2400");
+  if(tutar===null) return;
+  uyeAidatTahakkukOlustur(Number(tutar)||2400, yil);
+}
+
+function uyeAidatYilBasiKontrol(){
+  const bugun=todayStr();
+  const yil=new Date().getFullYear();
+  const lsKey=`ys_uye_aidat_tahakkuk_${yil}`;
+  if(localStorage.getItem(lsKey)) return; // Bu yıl zaten yapıldı
+
+  // 1 Ocak mı?
+  const isYilBasi=bugun===`${yil}-01-01`;
+  if(!isYilBasi) return;
+
+  // Daha önce yapılmadıysa sor
+  localStorage.setItem(lsKey,"1");
+  const tutar=prompt(`${yil} yılı üye aidat tahakkuku oluşturulsun mu?\nKişi başı tutar (₺):`, "2400");
+  if(tutar===null) return;
+  uyeAidatTahakkukOlustur(Number(tutar)||2400, yil);
+}
+
 function renderUyeAidatlari(){
   const listEl=document.getElementById("uyeAidatListesi");
   const ozetEl=document.getElementById("uyeAidatOzetBar");
@@ -10402,6 +10490,7 @@ function refreshAll(){
   updateOnayBadge();
   // Ayın son günüyse otomatik tahakkuk kontrolü
   personelOtomatikTahakkukKontrol();
+  uyeAidatYilBasiKontrol();
 }
 
 /* ═══ INIT ═══ */
