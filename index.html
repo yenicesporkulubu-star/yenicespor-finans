@@ -527,15 +527,18 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
 <main id="appMain" style="display:none">
 
 <!-- ══════════════════ DASHBOARD ══════════════════ -->
-<section id="tab-dashboard" class="grid" style="gap:10px">
+<section id="tab-dashboard" class="grid" style="gap:12px">
 
+  <!-- UYARILAR -->
+  <div id="uyariBanner" style="display:none;grid-column:1/-1"></div>
+  <div id="dashOnayUyari" style="display:none;grid-column:1/-1"></div>
   <div id="mobilKasaBar" style="display:none"></div>
 
-  <!-- BAŞLIK + DÖNEM -->
+  <!-- DÖNEM SEÇİCİ -->
   <div style="grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-    <div style="font-size:18px;font-weight:900;color:var(--text)">Finans Kokpiti</div>
+    <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px">YENİCESPOR FİNANS</div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <select id="dashPeriod" onchange="dashPeriodDegis()" style="padding:7px 14px;border-radius:10px;border:1.5px solid var(--border);font-size:13px;font-weight:700;background:var(--card);color:var(--text)">
+      <select id="dashPeriod" onchange="dashPeriodDegis()" style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--border);font-size:13px;font-weight:700;background:var(--card);color:var(--text)">
         <option value="buay">Bu Ay</option>
         <option value="gecenay">Geçen Ay</option>
         <option value="3ay">Son 3 Ay</option>
@@ -548,60 +551,36 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
         <input type="date" id="dashOzelBitis" style="padding:6px 10px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;background:var(--card);color:var(--text)">
         <button onclick="renderDashboard()" class="btn sm accent">Uygula</button>
       </div>
-      <span id="dashPeriodLabel" style="font-size:11px;color:var(--muted);background:var(--bg2);padding:4px 10px;border-radius:6px"></span>
+      <span id="dashPeriodLabel" style="font-size:11px;color:var(--muted)"></span>
     </div>
   </div>
 
-  <!-- UYARILAR -->
-  <div id="uyariBanner" style="display:none;grid-column:1/-1"></div>
+  <!-- ① NET POZİSYON — tam üst, büyük -->
+  <div id="dashNetPozisyon" style="grid-column:1/-1"></div>
 
-  <!-- ONAY KUYRUĞU UYARISI -->
-  <div id="dashOnayUyari" style="display:none;grid-column:1/-1"></div>
+  <!-- ② 2 KOLON: LİKİT+ALACAK | BORÇ+YÜKÜMLÜLÜK -->
+  <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div id="dashVarlikPanel" onclick="openDetay('varlik')" style="background:var(--card);border:2px solid rgba(16,176,87,.25);border-radius:16px;padding:18px;cursor:pointer;transition:all .18s"
+      onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 24px rgba(16,176,87,.12)'"
+      onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div style="font-size:10px;font-weight:800;color:#10b057;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">💚 Varlıklar &amp; Alacaklar</div>
+      <div id="dashVarlikIcerik"></div>
+    </div>
+    <div id="dashBorcPanel" onclick="openDetay('borc')" style="background:var(--card);border:2px solid rgba(230,57,70,.2);border-radius:16px;padding:18px;cursor:pointer;transition:all .18s"
+      onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 24px rgba(230,57,70,.1)'"
+      onmouseout="this.style.transform='';this.style.boxShadow=''">
+      <div style="font-size:10px;font-weight:800;color:#e63946;text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px">❤️ Borçlar &amp; Yükümlülükler</div>
+      <div id="dashBorcIcerik"></div>
+    </div>
+  </div>
 
-  <!-- A) ÜST VARLIK SATIRI: 4 kart -->
-  <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(4,1fr);gap:10px" id="varlikSatiri"></div>
+  <!-- ③ BRANŞ BLOKLARI: A TAKIM | ALTYAPI | ATLETİZM -->
+  <div id="dashBransBlok" style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px"></div>
 
-  <!-- B) GELİR / GİDER / NET -->
+  <!-- ④ GELİR / GİDER kısa özet -->
   <div style="grid-column:1/-1" id="gelirGiderBlok"></div>
 
-  <!-- C) VARLIK KUTULARI (0 olmayanlar) + BORÇLAR -->
-  <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px">
-    <div id="varlikKart" onclick="openDetay('varlik')" style="background:var(--card);border:1.5px solid rgba(16,176,87,.3);border-radius:16px;padding:18px;cursor:pointer;transition:all .18s"
-      onmouseover="this.style.boxShadow='0 4px 20px rgba(16,176,87,.15)';this.style.transform='translateY(-2px)'"
-      onmouseout="this.style.boxShadow='';this.style.transform=''">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <span style="font-size:12px;font-weight:800;color:#10b057;text-transform:uppercase;letter-spacing:.5px">🏦 Varlıklar</span>
-        <span style="font-size:11px;color:var(--muted);background:rgba(16,176,87,.08);padding:3px 10px;border-radius:6px">Detay →</span>
-      </div>
-      <div id="varlikKartIcerik" style="display:flex;flex-direction:column;gap:7px"></div>
-    </div>
-    <div id="borcKart" onclick="openDetay('borc')" style="background:var(--card);border:1.5px solid rgba(230,57,70,.25);border-radius:16px;padding:18px;cursor:pointer;transition:all .18s"
-      onmouseover="this.style.boxShadow='0 4px 20px rgba(230,57,70,.12)';this.style.transform='translateY(-2px)'"
-      onmouseout="this.style.boxShadow='';this.style.transform=''">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <span style="font-size:12px;font-weight:800;color:#e63946;text-transform:uppercase;letter-spacing:.5px">⬇️ Borçlar</span>
-        <span style="font-size:11px;color:var(--muted);background:rgba(230,57,70,.08);padding:3px 10px;border-radius:6px">Detay →</span>
-      </div>
-      <div id="borcKartIcerik" style="display:flex;flex-direction:column;gap:7px"></div>
-    </div>
-  </div>
-
-  <!-- D) KATEGORİ KIRILIMLARI — GELİR/GİDER -->
-  <div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px">
-    <div class="card" style="padding:14px 16px">
-      <div class="card-title" style="margin-bottom:10px">💰 Gelir Kategorileri</div>
-      <div id="dashGelirKat"></div>
-    </div>
-    <div class="card" style="padding:14px 16px">
-      <div class="card-title" style="margin-bottom:10px">💸 Gider Kategorileri</div>
-      <div id="dashGiderKat"></div>
-    </div>
-  </div>
-
-  <!-- KATEGORİ KUTULARI -->
-  <div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px" id="dashKategoriKutular"></div>
-
-  <!-- E) SON İŞLEMLER (kompakt) -->
+  <!-- ⑤ SON İŞLEMLER kompakt -->
   <div class="card" style="padding:12px 14px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">
       <div class="card-title" style="margin:0">Son İşlemler <span id="recentSayi" style="font-size:11px;color:var(--muted);font-weight:400"></span></div>
@@ -633,19 +612,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
     </div>
   </div>
 
-  <!-- F) YIL PERFORMANS + 6 AY GRAFİK -->
-  <div class="grid cols4 gap8">
-    <div class="kpi-big" style="background:linear-gradient(135deg,#0d5c38,#1a9060);border-color:transparent">
-      <div class="kpi-big-label" style="color:rgba(255,255,255,.7)">🤖 AI Tahmini</div>
-      <div style="font-size:10px;color:rgba(255,255,255,.6);margin-bottom:4px" id="kpiAiLabel">Gelecek Ay</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="kpiAiGrid"></div>
-    </div>
-    <div class="card" style="grid-column:span 3">
-      <div class="card-title" style="margin-bottom:6px">Bu Yıl Performans</div>
-      <div id="kpiYillik" style="display:flex;flex-direction:column;gap:6px"></div>
-    </div>
-  </div>
-
+  <!-- ⑥ 6 AY GRAFİK -->
   <div class="card" style="padding:12px 14px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px">
       <div class="card-title" style="margin:0">Son 6 Ay</div>
@@ -658,7 +625,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
     <div id="dashSparkLabels" style="display:flex;gap:4px;margin-top:4px;padding:0 2px"></div>
   </div>
 
-  <!-- Gizli eski ID'ler -->
+  <!-- Gizli eski ID'ler (diğer kodlar için) -->
   <div style="display:none">
     <div id="kpiAyGelir"></div><div id="kpiAyGider"></div><div id="kpiAyNet"></div>
     <div id="kpiAyNetSub"></div><div id="kpiBudgetGelir"></div><div id="kpiBudgetGider"></div>
@@ -666,11 +633,16 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
     <div id="kpiAyGelirSub"></div><div id="kpiAyGiderSub"></div>
     <div id="kpiAlacak"></div><div id="kpiAlacakSub"></div>
     <div id="kpiBorcAlacak"></div><div id="kpiBorcSub"></div>
-    <div id="finansModel"></div>
-    <div id="kokpitBar"></div>
+    <div id="finansModel"></div><div id="kokpitBar"></div>
+    <div id="varlikSatiri"></div><div id="varlikKart"></div><div id="borcKart"></div>
+    <div id="varlikKartIcerik"></div><div id="borcKartIcerik"></div>
+    <div id="dashKategoriKutular"></div><div id="dashGelirKat"></div><div id="dashGiderKat"></div>
+    <div id="kpiAiGrid"></div><div id="kpiAiLabel"></div><div id="kpiYillik"></div>
+    <div id="mobilKasaBar2"></div>
   </div>
 
 </section>
+
 
 <!-- ══════════════════ İŞLEM EKLE ══════════════════ -->
 <section id="tab-txn" class="grid" style="display:none">
@@ -3398,6 +3370,9 @@ function renderDashboard(){
   renderVarlikBorcKartlar();
   // Gelir / Gider bloğu
   renderGelirGiderBlok(aralik);
+  renderNetPozisyon();
+  renderVarlikBorc();
+  renderBransBlok(aralik);
   renderVarlikSatiri();
   renderKategoriKirilimlari(aralik);
   renderDashKategoriKutular();
@@ -3407,8 +3382,164 @@ function renderDashboard(){
 }
 
 /* ═══════════════════════════════════════════
-   A) ÜST VARLIK SATIRI — 4 özet kart
+   YENİ TEMİZ DASHBOARD RENDER
    ═══════════════════════════════════════════ */
+function renderNetPozisyon(){
+  const el=document.getElementById("dashNetPozisyon");
+  if(!el) return;
+  buildCache();
+  const {bakiye:kb}=hesaplaKasaBakiyeleri();
+  const nakit=kb["NAKİT"]||0;
+  const banka=(kb["BANKA"]||0)+(kb["GAYRİRESMİ BANKA"]||0);
+  const likit=nakit+banka;
+  let alacak=0;
+  for(const [,s] of (_cache.alcMap||new Map())) if(s.tah-s.tah_>0) alacak+=s.tah-s.tah_;
+  let borc=0;
+  for(const [,s] of (_cache.borcMap||new Map())){const b=s.tah-s.ode;if(b>0)borc+=b;}
+  const net=likit+alacak-borc;
+  const isPos=net>=0;
+
+  el.innerHTML=`<div style="background:linear-gradient(135deg,${isPos?"#0d5c38,#1a9060":"#7f1d1d,#b91c1c"});border-radius:18px;padding:22px 24px;color:#fff">
+    <div style="font-size:11px;font-weight:700;opacity:.7;letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px">YENİCESPOR — Net Finansal Pozisyon</div>
+    <div style="font-size:36px;font-weight:900;letter-spacing:-2px;margin-bottom:16px">${fmt(net)} ₺</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px">
+      <div>
+        <div style="font-size:10px;opacity:.65;font-weight:700;text-transform:uppercase">💵 Nakit</div>
+        <div style="font-size:18px;font-weight:800">${fmt(nakit)} ₺</div>
+      </div>
+      <div>
+        <div style="font-size:10px;opacity:.65;font-weight:700;text-transform:uppercase">🏦 Banka</div>
+        <div style="font-size:18px;font-weight:800">${fmt(banka)} ₺</div>
+      </div>
+      <div>
+        <div style="font-size:10px;opacity:.65;font-weight:700;text-transform:uppercase">📋 Alacak</div>
+        <div style="font-size:18px;font-weight:800">${fmt(alacak)} ₺</div>
+      </div>
+      <div>
+        <div style="font-size:10px;opacity:.65;font-weight:700;text-transform:uppercase">⚠️ Borç</div>
+        <div style="font-size:18px;font-weight:800">${fmt(borc)} ₺</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderVarlikBorc(){
+  buildCache();
+  const {bakiye:kb}=hesaplaKasaBakiyeleri();
+  const nakit=kb["NAKİT"]||0;
+  const banka=(kb["BANKA"]||0)+(kb["GAYRİRESMİ BANKA"]||0);
+  const altin=kb["ALTIN"]||0;
+  const cek=kb["ÇEK"]||0;
+  const senet=kb["SENET"]||0;
+
+  let alacak=0;
+  const alcMap=_cache.alcMap||new Map();
+  for(const [,s] of alcMap) if(s.tah-s.tah_>0) alacak+=s.tah-s.tah_;
+
+  // Varlık paneli
+  const vEl=document.getElementById("dashVarlikIcerik");
+  if(vEl){
+    const satirlar=[];
+    function sat(label,val,renk){
+      if(Math.abs(val)<1) return;
+      satirlar.push(`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:12px;color:var(--muted)">${label}</span>
+        <span style="font-size:14px;font-weight:800;color:${renk}">${fmt(val)} ₺</span>
+      </div>`);
+    }
+    sat("💵 Nakit Kasa",nakit,"#10b057");
+    sat("🏦 Banka",banka,"#0077a8");
+    sat("📋 Alacaklar",alacak,"#f59e0b");
+    sat("🪙 Altın/Kıymetli",altin,"#854d0e");
+    sat("📄 Çek",cek,"#7c3aed");
+    sat("📜 Senet",senet,"#b45309");
+    const toplam=nakit+banka+alacak+altin+cek+senet;
+    vEl.innerHTML=(satirlar.join("")||"<div style='color:var(--muted);font-size:12px'>Veri yok</div>")+
+      `<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px">
+        <span style="font-size:12px;font-weight:800">TOPLAM</span>
+        <span style="font-size:16px;font-weight:900;color:#10b057">${fmt(toplam)} ₺</span>
+      </div>`;
+  }
+
+  // Borç paneli
+  const bEl=document.getElementById("dashBorcIcerik");
+  if(bEl){
+    const borcMap=_cache.borcMap||new Map();
+    const borcDetay=[];
+    let toplamBorc=0;
+    for(const [id,s] of borcMap){
+      const b=s.tah-s.ode;
+      if(b>0){const c=cariById(id);borcDetay.push({ad:c?c.ad:"?",val:b});toplamBorc+=b;}
+    }
+    borcDetay.sort((a,b)=>b.val-a.val);
+    // Vadesi gelen taksitler
+    const bugun=todayStr();
+    const yaklasTak=(sozlesmeTaksitler||[]).filter(t=>t.durum!=="odendi"&&t.vade_tarihi<=bugun);
+    const yaklasToplam=yaklasTak.reduce((a,t)=>a+(t.tutar-(t.odenen_tutar||0)),0);
+
+    const satirlar=borcDetay.slice(0,5).map(b=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px;color:var(--muted)">${b.ad}</span>
+      <span style="font-size:14px;font-weight:800;color:#e63946">${fmt(b.val)} ₺</span>
+    </div>`);
+    if(yaklasToplam>0) satirlar.push(`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:12px;color:#f59e0b">⏰ Vadesi Gelen Taksit</span>
+      <span style="font-size:14px;font-weight:800;color:#f59e0b">${fmt(yaklasToplam)} ₺</span>
+    </div>`);
+    bEl.innerHTML=(satirlar.join("")||"<div style='color:#10b057;font-size:12px;padding:8px 0'>✅ Açık borç yok</div>")+
+      `<div style="display:flex;justify-content:space-between;padding:8px 0;margin-top:4px">
+        <span style="font-size:12px;font-weight:800">TOPLAM BORÇ</span>
+        <span style="font-size:16px;font-weight:900;color:${toplamBorc>0?"#e63946":"#10b057"}">${fmt(toplamBorc)} ₺</span>
+      </div>`;
+  }
+}
+
+function renderBransBlok(aralik){
+  const el=document.getElementById("dashBransBlok");
+  if(!el) return;
+  const {bas,bit}=aralik;
+  const yil=String(new Date().getFullYear());
+
+  // Branş bazlı toplamlar
+  const bransMap={futbol_atakim:{g:0,gd:0,label:"⚽ A Takım",renk:"#0077a8"},futbol_altyapi:{g:0,gd:0,label:"🌱 Altyapı",renk:"#7c3aed"},atletizm:{g:0,gd:0,label:"🏃 Atletizm",renk:"#f59e0b"}};
+
+  for(const t of state.transactions){
+    if(!t.tarih||t.tarih<bas||t.tarih>bit) continue;
+    if((t.kategori||"").toLowerCase().includes("tahakkuk")) continue;
+    const v=Number(t.tutar)||0;
+    const c=cariById(t.cari_temp_id)||{};
+    const br=getCariBrans(c);
+    const ak=getCariAnaKat(c);
+    const isGelir=t.tur==="GELİR";
+
+    if(br==="futbol"&&ak==="a_takim"){if(isGelir)bransMap.futbol_atakim.g+=v;else bransMap.futbol_atakim.gd+=v;}
+    else if(br==="futbol"){if(isGelir)bransMap.futbol_altyapi.g+=v;else bransMap.futbol_altyapi.gd+=v;}
+    else if(br==="atletizm"){if(isGelir)bransMap.atletizm.g+=v;else bransMap.atletizm.gd+=v;}
+  }
+
+  el.innerHTML=Object.entries(bransMap).map(([key,{g,gd,label,renk}])=>{
+    const net=g-gd;
+    const toplamHarcama=gd;
+    return `<div style="background:var(--card);border:1.5px solid ${renk}30;border-radius:14px;padding:16px;cursor:pointer" onclick="showTab('caris')">
+      <div style="font-size:11px;font-weight:800;color:${renk};margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">${label}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;justify-content:space-between">
+          <span style="font-size:11px;color:var(--muted)">Gelir</span>
+          <span style="font-size:13px;font-weight:700;color:#10b057">${fmt(g)} ₺</span>
+        </div>
+        <div style="display:flex;justify-content:space-between">
+          <span style="font-size:11px;color:var(--muted)">Gider</span>
+          <span style="font-size:13px;font-weight:700;color:#e63946">${fmt(gd)} ₺</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:6px;margin-top:2px">
+          <span style="font-size:11px;font-weight:700">Net</span>
+          <span style="font-size:14px;font-weight:900;color:${net>=0?"#10b057":"#e63946"}">${fmt(net)} ₺</span>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+
 function renderVarlikSatiri(){
   const el=document.getElementById("varlikSatiri");
   if(!el) return;
