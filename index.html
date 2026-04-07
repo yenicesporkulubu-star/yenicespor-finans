@@ -699,7 +699,7 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
 </section>
 
 <!-- ══════════════════ GELİRLER ══════════════════ -->
-<section id="tab-gelirler" class="grid" style="display:none">
+<section id="tab-gelirler" class="grid" style="display:none;gap:12px">
   <div class="card" style="grid-column:1/-1;padding:14px 16px">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
       <div>
@@ -708,10 +708,20 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
       </div>
       <button class="btn accent" onclick="openGelirHesapEkle()" style="font-weight:700">+ Hesap Ekle</button>
     </div>
-    <!-- Özet satırı -->
     <div id="gelirHesapOzet" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:16px"></div>
-    <!-- Kart grid -->
     <div id="gelirHesapGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px"></div>
+  </div>
+
+  <!-- Üye Aidat Grubu -->
+  <div class="card" style="grid-column:1/-1;padding:14px 16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <div>
+        <div class="card-title" style="margin:0">👥 Üye Aidatları</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Kişi başı 2.400 ₺/yıl · Tahakkuk vs Tahsilat</div>
+      </div>
+      <div id="uyeAidatOzetBar" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+    </div>
+    <div id="uyeAidatListesi"></div>
   </div>
 </section>
 
@@ -3958,19 +3968,58 @@ function openDetay(type){
         '<div style="color:var(--ok);padding:12px;text-align:center">✅ Açık alacak yok</div>');
 
   } else if(type==="borc"){
-    baslik="⬇️ Borçlar Detay";
-    govde=
-      '<div style="margin-bottom:18px">'
-      +kalemRow("📋","Toplam Tahakkuk Gider",tahakkukBorc,"#e63946")
-      +kalemRow("💸","Ödenen",acikBorc+Math.max(0,tahakkukBorc-acikBorc-0),"#64748b")
-      +'<div style="display:flex;justify-content:space-between;padding:10px 0;margin-top:4px"><b>AÇIK BORÇ</b><b style="font-size:18px;color:'+(acikBorc>0?"var(--bad)":"var(--ok)")+'">'+fmt(acikBorc)+' ₺</b></div>'
-      +'</div>'
-      +(borcDetay.length?
-        '<div style="font-weight:700;font-size:13px;margin-bottom:8px">⬇️ Borç Kırılımı ('+borcDetay.length+' cari)</div>'
-        +'<div class="tbl-wrap"><table><thead><tr><th>Cari</th><th class="right">Açık Borç</th></tr></thead><tbody>'
-        +borcDetay.map(function(x){return '<tr><td style="font-weight:600">'+x.ad+'</td><td class="right" style="font-weight:800;color:var(--bad)">'+fmt(x.val)+' ₺</td></tr>';}).join("")
-        +'</tbody></table></div>':
-        '<div style="color:var(--ok);padding:12px;text-align:center">✅ Açık borç yok</div>');
+    baslik="⬇️ Borçlar & Yükümlülükler Detay";
+
+    // Sözleşme bazlı kalan yükümlülük
+    const cariOd=new Map();
+    for(const t of state.transactions){
+      if(t.tur!=="GİDER"||(t.kategori||"").toLowerCase().includes("tahakkuk")) continue;
+      const cid=t.cari_temp_id||t.cari_id||""; if(!cid) continue;
+      cariOd.set(cid,(cariOd.get(cid)||0)+Number(t.tutar||0));
+    }
+    const TIP_IKON={Futbolcu:"⚽","A Takım":"🏆","Altyapı":"🌱","Atletizm":"🏃","Personel":"👤","Sponsor":"🤝","Kiracı":"🏠","Tedarikçi":"📦","Diğer":"📄"};
+    const sozRows=[];
+    let toplamYuk=0;
+    const tipMap={};
+    for(const s of (sozlesmeler||[])){
+      if(s.durum!=="Aktif"||!s.toplam_deger) continue;
+      const toplam=Number(s.toplam_deger)||0;
+      const cid=s.cari_temp_id||"";
+      const odenen=cariOd.get(cid)||0;
+      const kalan=Math.max(0,toplam-odenen);
+      if(kalan<=0) continue;
+      toplamYuk+=kalan;
+      const tip=s.tip||"Diğer";
+      if(!tipMap[tip]){tipMap[tip]={toplam:0,rows:[]};}
+      tipMap[tip].toplam+=kalan;
+      tipMap[tip].rows.push({ad:s.ad,toplam,odenen,kalan});
+    }
+    // Taksit tablosu
+    const bugun=todayStr();
+    const gecikanTak=(sozlesmeTaksitler||[]).filter(t=>t.durum!=="odendi"&&t.vade_tarihi&&t.vade_tarihi<bugun);
+    const gecikanToplam=gecikanTak.reduce((a,t)=>a+Math.max(0,(t.tutar||0)-(t.odenen_tutar||0)),0);
+
+    let borcHTML='<div style="margin-bottom:14px">';
+    borcHTML+=kalemRow("📋","Toplam Sözleşme Yükümlülüğü",toplamYuk,"#e63946");
+    if(gecikanToplam>0) borcHTML+=kalemRow("🔴","Gecikmiş Taksitler",gecikanToplam,"#dc2626");
+    borcHTML+='<div style="display:flex;justify-content:space-between;padding:10px 0;margin-top:4px"><b>TOPLAM AÇIK</b><b style="font-size:18px;color:'+(toplamYuk>0?"var(--bad)":"var(--ok)")+'">'+fmt(toplamYuk)+' ₺</b></div></div>';
+
+    // Tip bazlı detay
+    for(const [tip,{toplam,rows}] of Object.entries(tipMap).sort((a,b)=>b[1].toplam-a[1].toplam)){
+      borcHTML+=`<div style="font-weight:700;font-size:12px;color:var(--muted);text-transform:uppercase;margin:12px 0 6px">${TIP_IKON[tip]||"📄"} ${tip} — ${fmt(toplam)} ₺</div>`;
+      borcHTML+='<div class="tbl-wrap"><table><thead><tr><th>Ad</th><th class="right">Toplam</th><th class="right">Ödenen</th><th class="right" style="color:#e63946">Kalan</th></tr></thead><tbody>';
+      borcHTML+=rows.map(r=>`<tr><td style="font-weight:600;font-size:12px">${r.ad}</td><td class="right" style="font-size:12px">${fmt(r.toplam)} ₺</td><td class="right" style="font-size:12px;color:#10b057">${fmt(r.odenen)} ₺</td><td class="right" style="font-weight:800;color:#e63946">${fmt(r.kalan)} ₺</td></tr>`).join("");
+      borcHTML+='</tbody></table></div>';
+    }
+
+    if(gecikanTak.length>0){
+      borcHTML+='<div style="font-weight:700;font-size:12px;color:#dc2626;margin:12px 0 6px">🔴 Gecikmiş Taksitler</div>';
+      borcHTML+='<div class="tbl-wrap"><table><thead><tr><th>Vade</th><th>Sözleşme</th><th class="right">Kalan</th></tr></thead><tbody>';
+      borcHTML+=gecikanTak.map(t=>{const s=(sozlesmeler||[]).find(x=>x.id===t.sozlesme_id);return `<tr><td style="font-size:11px;color:#dc2626;font-weight:700">${t.vade_tarihi}</td><td style="font-size:12px">${s?s.ad:"?"}</td><td class="right" style="font-weight:800;color:#dc2626">${fmt(Math.max(0,(t.tutar||0)-(t.odenen_tutar||0)))} ₺</td></tr>`;}).join("");
+      borcHTML+='</tbody></table></div>';
+    }
+
+    govde=borcHTML;
   }
 
   openModal(baslik,govde);
@@ -9659,6 +9708,92 @@ function renderGelirHesaplar(){
   }).join("");
 }
 
+function renderUyeAidatlari(){
+  const listEl=document.getElementById("uyeAidatListesi");
+  const ozetEl=document.getElementById("uyeAidatOzetBar");
+  if(!listEl) return;
+
+  // Üye carilar — kategori içinde "aidat" veya id'de "uye_" olanlar
+  const uyeler=allCaris().filter(c=>{
+    const id=(c.id||"").toLowerCase();
+    const tur=(c.tur||"").toLowerCase();
+    const anat=(c.ana_tur||"").toLowerCase();
+    return id.startsWith("uye_")||tur.includes("üye")||anat.includes("üye")||tur.includes("aidat");
+  });
+
+  if(!uyeler.length){
+    listEl.innerHTML='<div style="color:var(--muted);text-align:center;padding:20px">Üye carisi bulunamadı</div>';
+    return;
+  }
+
+  // Her üye için tahakkuk vs tahsilat
+  const rows=[];
+  let topTah=0,topTah_=0;
+  for(const u of uyeler){
+    let tah=0,tah_=0;
+    for(const t of state.transactions){
+      if((t.cari_temp_id||t.cari_id)!==u.id) continue;
+      if(t.tur!=="GELİR") continue;
+      const v=Number(t.tutar)||0;
+      if((t.kategori||"").toLowerCase().includes("tahakkuk")) tah+=v; else tah_+=v;
+    }
+    const kalan=tah-tah_;
+    topTah+=tah; topTah_+=tah_;
+    rows.push({ad:u.ad,id:u.id,tah,tah_,kalan});
+  }
+  rows.sort((a,b)=>b.kalan-a.kalan);
+
+  // Özet
+  if(ozetEl){
+    ozetEl.innerHTML=`
+      <div style="background:rgba(245,158,11,.1);border-radius:8px;padding:8px 12px;text-align:center">
+        <div style="font-size:10px;color:#92400e;font-weight:700">TOPLAM TAHAKKUK</div>
+        <div style="font-size:18px;font-weight:900;color:#92400e">${fmt(topTah)} ₺</div>
+      </div>
+      <div style="background:rgba(16,176,87,.1);border-radius:8px;padding:8px 12px;text-align:center">
+        <div style="font-size:10px;color:#0d9448;font-weight:700">TAHSİL EDİLEN</div>
+        <div style="font-size:18px;font-weight:900;color:#0d9448">${fmt(topTah_)} ₺</div>
+      </div>
+      <div style="background:rgba(230,57,70,.1);border-radius:8px;padding:8px 12px;text-align:center">
+        <div style="font-size:10px;color:#e63946;font-weight:700">KALAN ALACAK</div>
+        <div style="font-size:18px;font-weight:900;color:#e63946">${fmt(topTah-topTah_)} ₺</div>
+      </div>
+      <div style="background:rgba(100,116,139,.1);border-radius:8px;padding:8px 12px;text-align:center">
+        <div style="font-size:10px;color:var(--muted);font-weight:700">ÜYE SAYISI</div>
+        <div style="font-size:18px;font-weight:900">${uyeler.length}</div>
+      </div>`;
+  }
+
+  // Tablo
+  listEl.innerHTML=`<div class="tbl-wrap"><table>
+    <thead><tr>
+      <th>Üye Adı</th>
+      <th class="right">Tahakkuk</th>
+      <th class="right">Tahsil</th>
+      <th class="right">Kalan</th>
+      <th>Durum</th>
+    </tr></thead>
+    <tbody>${rows.map(r=>{
+      const tam=r.tah>0&&r.kalan<=0;
+      const hic=r.tah_===0&&r.tah>0;
+      const durum=tam
+        ?'<span style="font-size:10px;background:rgba(16,176,87,.15);color:#0d9448;border-radius:4px;padding:2px 7px;font-weight:700">✅ Tam</span>'
+        :hic
+        ?'<span style="font-size:10px;background:rgba(230,57,70,.12);color:#e63946;border-radius:4px;padding:2px 7px;font-weight:700">❌ Ödenmedi</span>'
+        :r.kalan>0
+        ?'<span style="font-size:10px;background:rgba(245,158,11,.12);color:#b45309;border-radius:4px;padding:2px 7px;font-weight:700">⚠️ Kısmi</span>'
+        :'<span style="font-size:10px;background:var(--bg2);color:var(--muted);border-radius:4px;padding:2px 7px">—</span>';
+      return `<tr class="clickable" data-cari="${r.id}">
+        <td style="font-weight:600">${r.ad}</td>
+        <td class="right" style="font-size:13px">${r.tah>0?fmt(r.tah)+" ₺":"—"}</td>
+        <td class="right" style="font-size:13px;color:#10b057">${r.tah_>0?fmt(r.tah_)+" ₺":"—"}</td>
+        <td class="right" style="font-size:13px;font-weight:800;color:${r.kalan>0?"#e63946":"#10b057"}">${r.kalan>0?fmt(r.kalan)+" ₺":"✅"}</td>
+        <td>${durum}</td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table></div>`;
+}
+
 /* Gelir Hesabı Ekle/Düzenle Modal */
 function openGelirHesapEkle(hesapId){
   const mevcut=hesapId?(state.gelirHesaplari||[]).find(h=>h.id===hesapId):null;
@@ -10261,6 +10396,7 @@ function refreshAll(){
   renderTahGrupBtns();
   renderKasaTx();
   renderGelirHesaplar();
+  renderUyeAidatlari();
   bindRowClicks();
   renderOnayKuyrugu();
   updateOnayBadge();
