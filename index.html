@@ -991,17 +991,39 @@ input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(13
 </div>
 
 <!-- ══════════════════ PERSONEL ══════════════════ -->
-<section id="tab-personel" class="grid" style="display:none">
+<section id="tab-personel" class="grid" style="display:none;gap:12px">
+
+  <!-- Özet + Otomatik Tahakkuk -->
   <div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div class="card-title" style="margin:0">Personel Listesi</div>
-      <button class="btn accent" id="btnNewPerson">+ Personel Ekle</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <div>
+        <div class="card-title" style="margin:0">👤 Personel Yönetimi</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Aktif personel her ayın son günü otomatik tahakkuk eder</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="personelTahakkukOlustur()" style="background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.4);color:#92400e;font-weight:700">📋 Bu Ay Tahakkuk Oluştur</button>
+        <button class="btn accent" id="btnNewPerson">+ Personel Ekle</button>
+      </div>
     </div>
+    <!-- Özet bar -->
+    <div id="personelOzet" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:14px"></div>
+    <!-- Liste -->
     <div class="tbl-wrap"><table>
-      <thead><tr><th>Ad Soyad</th><th>Tür</th><th>Aylık</th><th>Bu Ay Ödeme</th><th>Durum</th><th>Not</th><th></th></tr></thead>
+      <thead><tr>
+        <th>Ad Soyad</th><th>Tür</th><th>Aylık</th>
+        <th>İşe Giriş</th><th>İşe Çıkış</th>
+        <th>Bu Ay</th><th>Durum</th><th>Not</th><th></th>
+      </tr></thead>
       <tbody id="personRows"></tbody>
     </table></div>
   </div>
+
+  <!-- Aylık Tahakkuk Geçmişi -->
+  <div class="card">
+    <div class="card-title" style="margin-bottom:10px">📋 Maaş Tahakkuk Geçmişi</div>
+    <div id="personelTahakkukListesi"></div>
+  </div>
+
 </section>
 
 <!-- ══════════════════ RAPOR ══════════════════ -->
@@ -2132,11 +2154,11 @@ const SEED_CARIS = [
 ];
 
 const SEED_PERSONS = [
-  {id:"p_abdullah_alkay", ad:"Abdullah Alkay", tur:"Antrenör", ucret_tipi:"Sabit", sabit_tutar:24000, not:"Asgari 22.000 + 2.000"},
-  {id:"p_sadettin_soydan", ad:"Sadettin Soydan", tur:"Antrenör", ucret_tipi:"Sabit", sabit_tutar:22000, not:""},
-  {id:"p_selcuk_kaymakci", ad:"Selçuk Kaymakçı", tur:"Antrenör", ucret_tipi:"Sabit", sabit_tutar:22000, not:""},
-  {id:"p_necmettin_inan", ad:"Necmettin İnan", tur:"Antrenör", ucret_tipi:"Sabit", sabit_tutar:11000, not:""},
-  {id:"p_vahap_senol", ad:"Vahap Şenol", tur:"Antrenör", ucret_tipi:"Sabit", sabit_tutar:11000, not:""}
+  {id:"p_abdullah_alkay",  ad:"Abdullah Alkay",  tur:"Antrenör", ucret_tipi:"Sabit", sabit_tutar:24000, ise_giris:"2026-01-01", ise_cikis:null, not:"Asgari 22.000 + 2.000"},
+  {id:"p_sadettin_soydan", ad:"Sadettin Soydan", tur:"Antrenör", ucret_tipi:"Sabit", sabit_tutar:22000, ise_giris:"2026-01-01", ise_cikis:null, not:""},
+  {id:"p_selcuk_kaymakci", ad:"Selçuk Kaymakçı", tur:"Antrenör", ucret_tipi:"Sabit", sabit_tutar:22000, ise_giris:"2026-01-01", ise_cikis:null, not:""},
+  {id:"p_necmettin_inan",  ad:"Necmettin İnan",  tur:"Antrenör", ucret_tipi:"Sabit", sabit_tutar:11000, ise_giris:"2026-01-01", ise_cikis:null, not:""},
+  {id:"p_vahap_senol",     ad:"Vahap Şenol",     tur:"Antrenör", ucret_tipi:"Sabit", sabit_tutar:11000, ise_giris:"2026-01-01", ise_cikis:null, not:""}
 ];
 
 let state = {
@@ -5214,25 +5236,190 @@ function renderKasaTx(){
 
 /* ═══ PERSONEL ═══ */
 function renderPersons(){
-  const ay=todayStr().slice(0,7);
-  document.getElementById("personRows").innerHTML=state.persons.map(p=>{
+  const bugun=todayStr();
+  const ay=bugun.slice(0,7);
+
+  // Aktif personel: ise_giris <= bugun, ise_cikis null veya > bugun
+  const aktifler=state.persons.filter(p=>{
+    const g=p.ise_giris||"2000-01-01";
+    const c=p.ise_cikis||"9999-12-31";
+    return g<=bugun && c>bugun;
+  });
+  const cikislar=state.persons.filter(p=>p.ise_cikis&&p.ise_cikis<=bugun);
+
+  // Özet
+  const ozEl=document.getElementById("personelOzet");
+  if(ozEl){
+    const toplamAylik=aktifler.reduce((a,p)=>a+(p.sabit_tutar||0),0);
+    // Bu ay tahakkuk var mı?
+    const tahakkukVar=state.transactions.some(t=>t.tarih&&t.tarih.startsWith(ay)&&(t.kategori||"").toLowerCase().includes("tahakkuk")&&(t.kategori||"").toLowerCase().includes("maaş"));
+    ozEl.innerHTML=`
+      <div style="background:rgba(16,176,87,.08);border-radius:10px;padding:10px 14px;text-align:center">
+        <div style="font-size:10px;color:#0d9448;font-weight:800;text-transform:uppercase">Aktif Personel</div>
+        <div style="font-size:22px;font-weight:900;color:#0d9448">${aktifler.length}</div>
+      </div>
+      <div style="background:rgba(245,158,11,.08);border-radius:10px;padding:10px 14px;text-align:center">
+        <div style="font-size:10px;color:#92400e;font-weight:800;text-transform:uppercase">Aylık Toplam</div>
+        <div style="font-size:22px;font-weight:900;color:#92400e">${fmt(toplamAylik)} ₺</div>
+      </div>
+      <div style="background:${tahakkukVar?"rgba(16,176,87,.08)":"rgba(230,57,70,.08)"};border-radius:10px;padding:10px 14px;text-align:center">
+        <div style="font-size:10px;color:${tahakkukVar?"#0d9448":"#e63946"};font-weight:800;text-transform:uppercase">Bu Ay Tahakkuk</div>
+        <div style="font-size:16px;font-weight:900;color:${tahakkukVar?"#0d9448":"#e63946"}">${tahakkukVar?"✅ Oluşturuldu":"⏳ Bekliyor"}</div>
+      </div>
+      <div style="background:rgba(100,116,139,.08);border-radius:10px;padding:10px 14px;text-align:center">
+        <div style="font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase">Ayrılan</div>
+        <div style="font-size:22px;font-weight:900;color:var(--muted)">${cikislar.length}</div>
+      </div>`;
+  }
+
+  // Tablo
+  const tbody=document.getElementById("personRows");
+  if(!tbody) return;
+  const satirlar=[...aktifler,...cikislar].map(p=>{
+    const bugunAktif=(!p.ise_cikis||p.ise_cikis>bugun)&&(p.ise_giris||"2000-01-01")<=bugun;
     let ayOd=0;
-    for(const t of state.transactions) if(t.cari_temp_id===p.id&&t.tur==="GİDER"&&t.tarih&&t.tarih.startsWith(ay)) ayOd+=Number(t.tutar)||0;
-    const s=p.sabit_tutar&&ayOd>=p.sabit_tutar?'<span class="pill ok" style="font-size:10px">Ödendi ✓</span>':ayOd>0?'<span class="pill warn" style="font-size:10px">Kısmi</span>':'<span class="pill bad" style="font-size:10px">Ödenmedi</span>';
-    const rate=p.sabit_tutar?Math.min(100,Math.round(ayOd/p.sabit_tutar*100)):0;
-    return `<tr class="clickable" data-cari="${p.id}">
+    for(const t of state.transactions){
+      if(t.cari_temp_id===p.id&&t.tur==="GİDER"&&t.tarih&&t.tarih.startsWith(ay)&&!(t.kategori||"").toLowerCase().includes("tahakkuk"))
+        ayOd+=Number(t.tutar)||0;
+    }
+    const sabit=p.sabit_tutar||0;
+    const durum=bugunAktif
+      ?(sabit&&ayOd>=sabit?'<span class="pill ok" style="font-size:10px">Ödendi ✓</span>'
+        :ayOd>0?'<span class="pill warn" style="font-size:10px">Kısmi</span>'
+        :'<span class="pill bad" style="font-size:10px">Ödenmedi</span>')
+      :'<span style="font-size:10px;color:var(--muted);background:var(--bg2);padding:2px 8px;border-radius:5px">Ayrıldı</span>';
+    const rate=sabit?Math.min(100,Math.round(ayOd/sabit*100)):0;
+    return `<tr class="${bugunAktif?"clickable":""}" data-cari="${p.id}">
       <td style="font-weight:600">${p.ad}</td>
-      <td style="font-size:12px;color:var(--muted)">${p.tur}</td>
-      <td class="right mono" style="font-size:15px;font-weight:800">${p.sabit_tutar?fmt(p.sabit_tutar)+" ₺":"—"}</td>
-      <td>
-        ${s} <span style="font-size:12px;color:var(--muted);margin-left:4px">${ayOd>0?fmt(ayOd)+" ₺":""}</span>
-        ${p.sabit_tutar?`<div class="rl-bar-wrap" style="width:100px;display:inline-block;vertical-align:middle;margin-left:8px"><div class="rl-bar ${rate>=100?"ok":rate>50?"warn":"bad"}" style="width:${rate}%"></div></div>`:""}
+      <td style="font-size:12px;color:var(--muted)">${p.tur||""}</td>
+      <td class="right mono" style="font-size:13px;font-weight:800">${sabit?fmt(sabit)+" ₺":"—"}</td>
+      <td style="font-size:12px">${p.ise_giris||"—"}</td>
+      <td style="font-size:12px;color:${p.ise_cikis?"#e63946":"#10b057"}">${p.ise_cikis||"Aktif"}</td>
+      <td>${durum}${ayOd>0?` <span style="font-size:11px;color:var(--muted)">${fmt(ayOd)} ₺</span>`:""}
+        ${sabit&&bugunAktif?`<div style="width:80px;height:4px;background:var(--border);border-radius:2px;display:inline-block;vertical-align:middle;margin-left:6px"><div style="height:4px;width:${rate}%;background:${rate>=100?"#10b057":rate>50?"#f59e0b":"#e63946"};border-radius:2px"></div></div>`:""}
       </td>
-      <td style="font-size:12px;color:var(--muted)">${p.not||""}</td>
-      <td><button class="btn sm bad" onclick="event.stopPropagation();deletePersonel('${p.id}')">🗑</button></td>
+      <td style="font-size:12px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis">${p.not||""}</td>
+      <td style="display:flex;gap:4px">
+        <button class="btn sm" onclick="event.stopPropagation();openNewPerson('${p.id}')" title="Düzenle">✏️</button>
+        <button class="btn sm bad" onclick="event.stopPropagation();deletePersonel('${p.id}')" title="Sil">🗑</button>
+        ${p.ise_cikis?"":`<button class="btn sm" onclick="event.stopPropagation();personelCikisYap('${p.id}')" style="font-size:10px;padding:3px 7px;background:rgba(230,57,70,.1);border-color:rgba(230,57,70,.3);color:#e63946">Çıkış</button>`}
+      </td>
     </tr>`;
-  }).join("")||'<tr><td colspan="6" class="muted" style="padding:16px">Personel yok</td></tr>';
+  });
+  tbody.innerHTML=satirlar.join("")||'<tr><td colspan="9" class="muted" style="padding:16px">Personel yok</td></tr>';
+
+  // Tahakkuk geçmişi
+  renderPersonelTahakkukListesi();
 }
+
+function renderPersonelTahakkukListesi(){
+  const el=document.getElementById("personelTahakkukListesi");
+  if(!el) return;
+  const tahakkuklar=state.transactions.filter(t=>(t.kategori||"").toLowerCase().includes("tahakkuk")&&(t.kategori||"").toLowerCase().includes("maaş")).sort((a,b)=>b.tarih.localeCompare(a.tarih)).slice(0,20);
+  if(!tahakkuklar.length){el.innerHTML='<div style="color:var(--muted);font-size:13px;text-align:center;padding:20px">Henüz tahakkuk kaydı yok</div>';return;}
+  el.innerHTML=`<div class="tbl-wrap"><table>
+    <thead><tr><th>Tarih</th><th>Personel</th><th>Kategori</th><th class="right">Tutar</th><th>Kasa</th></tr></thead>
+    <tbody>${tahakkuklar.map(t=>{
+      const c=cariById(t.cari_temp_id);
+      return `<tr>
+        <td style="font-size:12px">${t.tarih}</td>
+        <td style="font-size:12px;font-weight:600">${c?c.ad:(t.aciklama||"")}</td>
+        <td style="font-size:11px;color:var(--muted)">${t.kategori}</td>
+        <td class="right" style="color:#e63946;font-weight:700">${fmt(t.tutar)} ₺</td>
+        <td style="font-size:11px">${t.kasa||""}</td>
+      </tr>`;
+    }).join("")}</tbody>
+  </table></div>`;
+}
+
+async function personelCikisYap(id){
+  const p=state.persons.find(x=>x.id===id);
+  if(!p) return;
+  const tarih=prompt(`${p.ad} için çıkış tarihi (YYYY-AA-GG):`, todayStr());
+  if(!tarih) return;
+  const obj={...p, ise_cikis:tarih};
+  try{
+    await sb.patch("ys_persons",id,{ise_cikis:tarih});
+    const idx=state.persons.findIndex(x=>x.id===id);
+    if(idx>=0) state.persons[idx]=obj;
+    renderPersons();
+    toast(`✅ ${p.ad} çıkış tarihi: ${tarih}`,"ok");
+  }catch(e){toast("Hata: "+e.message,"err");}
+}
+
+// Aktif personel için bu ay tahakkuk oluştur (onay kuyruğuna düşür)
+async function personelTahakkukOlustur(){
+  const bugun=todayStr();
+  const ay=bugun.slice(0,7);
+  // Ay son günü
+  const ayBitis=new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).toISOString().slice(0,10);
+
+  const aktifler=state.persons.filter(p=>{
+    const g=p.ise_giris||"2000-01-01";
+    const c=p.ise_cikis||"9999-12-31";
+    return g<=bugun&&c>bugun&&(p.sabit_tutar||0)>0;
+  });
+
+  if(!aktifler.length){toast("Aktif personel yok","warn");return;}
+
+  // Zaten bu ay tahakkuk var mı kontrol et
+  const mevcutIds=new Set(
+    state.transactions
+      .filter(t=>t.tarih&&t.tarih.startsWith(ay)&&(t.kategori||"").includes("Tahakkuk"))
+      .map(t=>t.cari_temp_id)
+  );
+  // Draft'ta bekleyenler
+  const draftIds=new Set(
+    (state.drafts||[])
+      .filter(d=>d.tarih&&d.tarih.startsWith(ay)&&(d.kategori||"").includes("Tahakkuk"))
+      .map(d=>d.cari_id)
+  );
+
+  let eklenen=0, atlanan=0;
+  for(const p of aktifler){
+    if(mevcutIds.has(p.id)||draftIds.has(p.id)){atlanan++;continue;}
+    const draft={
+      id:"draft_"+crypto.randomUUID(),
+      kaynak:"otomatik_tahakkuk",
+      cari_id:p.id,
+      cari_ad:p.ad,
+      islem_tipi:"GİDER",
+      tutar:p.sabit_tutar,
+      kasa:"NAKİT",
+      aciklama:`${p.ad} — ${ay} Maaş Tahakkuku`,
+      tarih:ayBitis,
+      kategori:"Personel Maaş Tahakkuku",
+      durum:"bekliyor",
+      created_at:new Date().toISOString()
+    };
+    try{
+      await sb.post("ys_drafts",draft);
+      state.drafts.unshift(draft);
+      eklenen++;
+    }catch(e){console.warn(e);}
+  }
+  updateOnayBadge();
+  renderPersons();
+  if(eklenen>0){
+    toast(`✅ ${eklenen} personel için tahakkuk onay kuyruğuna eklendi${atlanan?` (${atlanan} zaten mevcut)`:""}` ,"ok");
+    showTab("onay");
+  } else {
+    toast(`Bu ay zaten ${atlanan} personel için tahakkuk oluşturulmuş`,"warn");
+  }
+}
+
+// Her ayın son günü otomatik çalış (sayfa açıkken)
+function personelOtomatikTahakkukKontrol(){
+  const bugun=todayStr();
+  const sonGun=new Date(new Date().getFullYear(), new Date().getMonth()+1, 0).toISOString().slice(0,10);
+  if(bugun!==sonGun) return; // Sadece ayın son günü
+  const lsKey="ys_tahakkuk_"+bugun;
+  if(localStorage.getItem(lsKey)) return; // Bugün zaten yapıldı
+  localStorage.setItem(lsKey,"1");
+  personelTahakkukOlustur();
+}
+
+
 
 /* ═══ DİNAMİK RAPOR ═══ */
 function rPeriod(p){
@@ -6556,25 +6743,67 @@ window.updateNcSub=function(){
 
 /* ═══ YENİ PERSONEL ═══ */
 document.getElementById("btnNewPerson").onclick=openNewPerson;
-function openNewPerson(){
-  openModal("Personel Ekle",`
+function openNewPerson(editId){
+  const ep=editId?state.persons.find(p=>p.id===editId):null;
+  openModal(ep?"Personel Düzenle":"Personel Ekle",`
     <div class="form-grid">
-      <div class="field"><label>Ad Soyad</label><input id="npName" placeholder="Ali Veli"/></div>
-      <div class="field"><label>Tür</label><select id="npType"><option>Antrenör</option><option>Futbolcu</option><option>Yönetici</option><option>Diğer</option></select></div>
-      <div class="field"><label>Ücret Tipi</label><select id="npPay"><option>Sabit</option><option>Değişken</option><option>Karma</option></select></div>
-      <div class="field"><label>Aylık (₺)</label><input id="npAmt" inputmode="decimal" placeholder="22000"/></div>
-      <div class="field" style="grid-column:1/-1"><label>Not</label><input id="npNote" placeholder=""/></div>
+      <div class="field"><label>Ad Soyad</label><input id="npName" value="${ep?ep.ad:''}" placeholder="Ali Veli"/></div>
+      <div class="field"><label>Tür</label>
+        <select id="npType">
+          <option ${ep?.tur==="Antrenör"?"selected":""}>Antrenör</option>
+          <option ${ep?.tur==="Futbolcu"?"selected":""}>Futbolcu</option>
+          <option ${ep?.tur==="Personel"?"selected":""}>Personel</option>
+          <option ${ep?.tur==="Yönetici"?"selected":""}>Yönetici</option>
+          <option ${ep?.tur==="Diğer"?"selected":""}>Diğer</option>
+        </select>
+      </div>
+      <div class="field"><label>Aylık Ücret (₺)</label><input id="npAmt" inputmode="decimal" value="${ep?.sabit_tutar||''}" placeholder="22000"/></div>
+      <div class="field"><label>Ücret Tipi</label>
+        <select id="npPay">
+          <option ${ep?.ucret_tipi==="Sabit"?"selected":""}>Sabit</option>
+          <option ${ep?.ucret_tipi==="Değişken"?"selected":""}>Değişken</option>
+        </select>
+      </div>
+      <div class="field"><label>İşe Giriş Tarihi</label><input type="date" id="npGiris" value="${ep?.ise_giris||todayStr()}"/></div>
+      <div class="field"><label>İşten Çıkış Tarihi <span style="font-size:10px;color:var(--muted)">(aktifse boş)</span></label><input type="date" id="npCikis" value="${ep?.ise_cikis||''}"/></div>
+      <div class="field" style="grid-column:1/-1"><label>Not</label><input id="npNote" value="${ep?.not||''}" placeholder=""/></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:14px">
-      <button class="btn accent" id="npSave" style="flex:1;padding:12px">Kaydet</button>
+      <button class="btn accent" id="npSave" style="flex:1;padding:12px">💾 Kaydet</button>
       <button class="btn" onclick="closeModal()" style="padding:12px">İptal</button>
     </div>`);
+
   document.getElementById("npSave").onclick=async()=>{
     const ad=(document.getElementById("npName").value||"").trim();
     if(!ad) return toast("Ad gir","err");
-    const obj={id:"p_"+Date.now(),ad,tur:document.getElementById("npType").value,ucret_tipi:document.getElementById("npPay").value,sabit_tutar:Number(String(document.getElementById("npAmt").value||"").replaceAll(",","."))||null,not:document.getElementById("npNote").value||""};
-    try{await sb.post("ys_persons",obj);state.persons.push(obj);refreshAll();closeModal();toast("Personel eklendi","ok");}
-    catch(e){state.persons.push(obj);refreshAll();closeModal();toast("Offline eklendi","warn");}
+    const ise_giris=document.getElementById("npGiris").value||todayStr();
+    const ise_cikis=document.getElementById("npCikis").value||null;
+    const obj={
+      id:ep?ep.id:"p_"+Date.now(),
+      ad,
+      tur:document.getElementById("npType").value,
+      ucret_tipi:document.getElementById("npPay").value,
+      sabit_tutar:Number(String(document.getElementById("npAmt").value||"").replaceAll(",","."))||null,
+      ise_giris,
+      ise_cikis,
+      not:document.getElementById("npNote").value||""
+    };
+    try{
+      if(ep){
+        await sb.patch("ys_persons",ep.id,obj);
+        const idx=state.persons.findIndex(p=>p.id===ep.id);
+        if(idx>=0) state.persons[idx]=obj; else state.persons.push(obj);
+      } else {
+        await sb.post("ys_persons",obj);
+        state.persons.push(obj);
+      }
+      refreshAll();closeModal();
+      toast(`${ep?"Personel güncellendi":"Personel eklendi"}: ${ad}`,"ok");
+    }catch(e){
+      if(!ep) state.persons.push(obj);
+      refreshAll();closeModal();
+      toast("Offline kaydedildi","warn");
+    }
   };
 }
 
@@ -10035,6 +10264,8 @@ function refreshAll(){
   bindRowClicks();
   renderOnayKuyrugu();
   updateOnayBadge();
+  // Ayın son günüyse otomatik tahakkuk kontrolü
+  personelOtomatikTahakkukKontrol();
 }
 
 /* ═══ INIT ═══ */
