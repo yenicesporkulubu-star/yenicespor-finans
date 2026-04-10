@@ -168,7 +168,6 @@ async function processMessage(msg, val, env, sbKey) {
     kategori: tur === "GELIR"
       ? (tahakkukVar ? "Sponsor Geliri" : "Diğer Gelir")
       : (tahakkukVar ? "Diğer Gider" : "Diğer Gider"),
-    kaynak: "whatsapp",
     gelir_id: null
   };
 
@@ -423,7 +422,6 @@ async function handleTelegram(request, env) {
     cari_id: cariId,
     aciklama: metin,
     kategori: tur === "GELIR" ? "Diğer Gelir" : "Diğer Gider",
-    kaynak: "telegram"
   };
 
   let hata = null;
