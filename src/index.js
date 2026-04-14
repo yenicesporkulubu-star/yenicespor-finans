@@ -244,10 +244,16 @@ async function fuzzyBulCari(sbKey, cariAd, tur) {
 
   // Supabase'den tüm carileri çek (ilk 500)
   const mevcut = await sbGet(sbKey, TABLES.CARIS, `select=id,ad&limit=500`);
-  const norm = s => (s || "").toLowerCase()
-    .replace(/[şŞ]/g,"s").replace(/[çÇ]/g,"c").replace(/[ğĞ]/g,"g")
-    .replace(/[üÜ]/g,"u").replace(/[öÖ]/g,"o").replace(/[ıIİi]/g,"i")
-    .replace(/[^a-z0-9]/g,"");
+  const norm = s => {
+    if (!s) return "";
+    // Normalize Unicode (NFD) then remove combining chars
+    let t = s.normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase();
+    // Turkish specific
+    t = t.replace(/ş/g,"s").replace(/ç/g,"c").replace(/ğ/g,"g")
+         .replace(/ü/g,"u").replace(/ö/g,"o")
+         .replace(/ı/g,"i").replace(/İ/gi,"i").replace(/I/g,"i");
+    return t.replace(/[^a-z0-9]/g,"");
+  };
 
   const nCari = norm(cariAd);
   let best = null, bestSkor = 0;
