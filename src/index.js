@@ -77,9 +77,10 @@ async function handleTelegram(request, env) {
     if (!parsed) continue;
 
     const { cariAd, tutar, tur, kasa } = parsed;
-    const { cariId, cariAdFinal, yeniCari } = await fuzzyBul(sbKey, cariAd, tur);
+    const fuzzyRes = await fuzzyBul(sbKey, cariAd, tur);
+    const { cariAdFinal, yeniCari, yakinlar } = fuzzyRes;
+    let cariId = fuzzyRes.cariId;
 
-    // Draft kaydet
     const draftId = "draft_" + crypto.randomUUID();
     const draft = {
       id: draftId,
@@ -100,24 +101,44 @@ async function handleTelegram(request, env) {
 
     const emoji = tur === "GELIR" ? "💰" : "💸";
     const turStr = tur === "GELIR" ? "GELİR" : "GİDER";
-    const yeniStr = yeniCari ? " _(yeni cari)_" : "";
 
-    // Her işlem için inline buton gönder
-    const mesajMetni =
-      `${emoji} *${turStr}* · ${tarih}\n` +
-      `👤 *${cariAdFinal}*${yeniStr}\n` +
-      `💵 *${tutar.toLocaleString("tr-TR")} ₺* · ${kasa}\n` +
-      `📝 _${satir}_`;
+    if (yeniCari && !cariId) {
+      // Cari bulunamadı — seçenek sun
+      const yakinlarStr = (yakinlar||[]).length
+        ? "\n\n🔍 Benzer cariler:" + (yakinlar||[]).map(c => `\n• ${c.ad}`).join("")
+        : "";
+      const mesajMetni =
+        `${emoji} *${turStr}* · ${tarih}\n` +
+        `❓ *"${cariAdFinal}"* — cari bulunamadı${yakinlarStr}\n\n` +
+        `💵 *${tutar.toLocaleString("tr-TR")} ₺* · ${kasa}\n` +
+        `📝 _${satir}_`;
 
-    await tgSendButtons(tgToken, chatId, mesajMetni, [
-      [
-        { text: "✅ Onayla", callback_data: `onayla:${draftId}` },
-        { text: "🗑 Sil",    callback_data: `sil:${draftId}` }
-      ],
-      [
-        { text: "✏️ Tutarı Düzenle", callback_data: `duzenle:${draftId}` }
-      ]
-    ]);
+      const buttons = [
+        [{ text: `➕ Yeni cari oluştur: ${cariAdFinal.slice(0,20)}`, callback_data: `yeni_cari:${draftId}:${encodeURIComponent(cariAdFinal)}:${tur}` }],
+      ];
+      // Yakın cariler için buton
+      for (const yc of (yakinlar||[]).slice(0,2)) {
+        buttons.push([{ text: `✔️ ${yc.ad}`, callback_data: `cari_sec:${draftId}:${yc.id}:${encodeURIComponent(yc.ad)}` }]);
+      }
+      buttons.push([{ text: "🗑 İptal", callback_data: `sil:${draftId}` }]);
+
+      await tgSendButtons(tgToken, chatId, mesajMetni, buttons);
+    } else {
+      // Cari biliniyor — normal onay butonu
+      const mesajMetni =
+        `${emoji} *${turStr}* · ${tarih}\n` +
+        `👤 *${cariAdFinal}*\n` +
+        `💵 *${tutar.toLocaleString("tr-TR")} ₺* · ${kasa}\n` +
+        `📝 _${satir}_`;
+
+      await tgSendButtons(tgToken, chatId, mesajMetni, [
+        [
+          { text: "✅ Onayla", callback_data: `onayla:${draftId}` },
+          { text: "🗑 Sil",    callback_data: `sil:${draftId}` }
+        ],
+        [{ text: "✏️ Tutarı Düzenle", callback_data: `duzenle:${draftId}` }]
+      ]);
+    }
 
     islendi++;
   }
@@ -202,6 +223,52 @@ async function handleCallback(cbq, env, sbKey, tgToken) {
       `Yeni tutarı şu formatta yaz:\n\`düzenle ${draftId.slice(-8)} 7500\``
     );
 
+  } else if (aksiyon === "yeni_cari") {
+    // Format: yeni_cari:draftId:cariAd:tur
+    const parts = data.split(":");
+    const draftId2 = parts[1];
+    const cariAd2 = decodeURIComponent(parts[2] || "");
+    const tur2 = parts[3] || "GELIR";
+    const cariTur = tur2 === "GELIR" ? "Diğer Gelir" : "Diğer Gider";
+    const anaTur = tur2 === "GELIR" ? "Gelir" : "Masraf";
+    const newId = "tg_" + cariAd2.toLowerCase().replace(/[^a-z0-9]/gi,"").slice(0,16) + "_" + Date.now().toString(36);
+    try {
+      await sbPost(sbKey, TABLES.CARIS, { id: newId, ad: cariAd2, tur: cariTur, ana_tur: anaTur });
+      await sbPatch(sbKey, TABLES.DRAFTS, { cari_id: newId }, `id=eq.${draftId2}`);
+      // Otomatik onayla
+      const drafts2 = await sbGet(sbKey, TABLES.DRAFTS, `id=eq.${draftId2}&select=*`);
+      const draft2 = drafts2?.[0];
+      if (draft2) {
+        const tx = { id: crypto.randomUUID(), tarih: draft2.tarih, tur: draft2.islem_tipi, tutar: draft2.tutar, kasa: draft2.kasa, cari_id: newId, cari_temp_id: newId, aciklama: draft2.aciklama, kategori: draft2.kategori };
+        await sbPost(sbKey, TABLES.TX, tx);
+        await sbPatch(sbKey, TABLES.DRAFTS, { durum: "onaylandi" }, `id=eq.${draftId2}`);
+        await tgEditMsg(tgToken, chatId, msgId, cbq.message.text + `\n\n✅ *Yeni cari oluşturuldu ve kaydedildi!*\n👤 ${cariAd2}`, []);
+      }
+    } catch(e) {
+      await tgEditMsg(tgToken, chatId, msgId, cbq.message.text + `\n\n❌ Hata: ${e.message}`, []);
+    }
+
+  } else if (aksiyon === "cari_sec") {
+    // Format: cari_sec:draftId:cariId:cariAd
+    const parts = data.split(":");
+    const draftId3 = parts[1];
+    const secCariId = parts[2];
+    const secCariAd = decodeURIComponent(parts[3] || "");
+    try {
+      await sbPatch(sbKey, TABLES.DRAFTS, { cari_id: secCariId, cari_ad: secCariAd }, `id=eq.${draftId3}`);
+      // Otomatik onayla
+      const drafts3 = await sbGet(sbKey, TABLES.DRAFTS, `id=eq.${draftId3}&select=*`);
+      const draft3 = drafts3?.[0];
+      if (draft3) {
+        const tx = { id: crypto.randomUUID(), tarih: draft3.tarih, tur: draft3.islem_tipi, tutar: draft3.tutar, kasa: draft3.kasa, cari_id: secCariId, cari_temp_id: secCariId, aciklama: draft3.aciklama, kategori: draft3.kategori };
+        await sbPost(sbKey, TABLES.TX, tx);
+        await sbPatch(sbKey, TABLES.DRAFTS, { durum: "onaylandi" }, `id=eq.${draftId3}`);
+        await tgEditMsg(tgToken, chatId, msgId, cbq.message.text + `\n\n✅ *${secCariAd} — Kaydedildi!*`, []);
+      }
+    } catch(e) {
+      await tgEditMsg(tgToken, chatId, msgId, cbq.message.text + `\n\n❌ Hata: ${e.message}`, []);
+    }
+
   } else if (aksiyon === "duzenle2") {
     // "düzenle XXXXX 7500" komutu
     const [,shortId, tutarStr] = data.split(":");
@@ -281,18 +348,19 @@ async function fuzzyBul(sbKey, cariAd, tur) {
 
   if (best && bestSkor >= 15) return { cariId: best.id, cariAdFinal: best.ad, yeniCari: false };
 
-  // Yeni cari oluştur
-  const id = "tg_" + norm(cariAd).slice(0,16) + "_" + Date.now().toString(36);
-  try {
-    await sbPost(sbKey, TABLES.CARIS, {
-      id, ad: cariAd,
-      tur: tur === "GELIR" ? "Diğer Gelir" : "Diğer Gider",
-      ana_tur: tur === "GELIR" ? "Gelir" : "Masraf"
-    });
-    return { cariId: id, cariAdFinal: cariAd, yeniCari: true };
-  } catch {
-    return fallback;
-  }
+  // Yakın eşleşme varsa öner (skor 5-14 arası)
+  const yakin = rows ? [...rows].sort((a,b)=>{
+    const sa = norm(a.ad).includes(norm(cariAd)) || norm(cariAd).includes(norm(a.ad)) ? 5 : 0;
+    const sb2 = norm(b.ad).includes(norm(cariAd)) || norm(cariAd).includes(norm(b.ad)) ? 5 : 0;
+    return sb2 - sa;
+  }).slice(0,3).filter(c => {
+    const nc = norm(c.ad);
+    const words = norm(cariAd).split(/\s+/).filter(w=>w.length>2);
+    return words.some(w=>nc.includes(w));
+  }) : [];
+
+  // Null döndür — caller inline buton göstersin
+  return { cariId: null, cariAdFinal: cariAd, yeniCari: true, yakinlar: yakin };
 }
 
 // ─── Supabase Helpers ─────────────────────────────────────────────────────────
