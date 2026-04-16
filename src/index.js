@@ -205,6 +205,23 @@ async function handleCallback(cbq, env, sbKey, tgToken) {
       try { await sbPatch(sbKey, TABLES.DRAFTS, { durum: "onaylandi", tx_id: tx.id }, `id=eq.${draftId}`); } catch {}
       await tgEditMsg(tgToken, chatId, msgId,
         cbq.message.text + "\n\n✅ *Kaydedildi!*", []);
+
+      // Son 10 işlemi listele
+      try {
+        const sonTxs = await sbGet(sbKey, TABLES.TX, "order=created_at.desc&limit=10&select=tarih,tur,tutar,kasa,aciklama");
+        if (sonTxs && sonTxs.length > 0) {
+          const fmtN = n => Number(n).toLocaleString("tr-TR");
+          const liste = sonTxs.map((t,i) => {
+            const em = t.tur === "GELİR" ? "💰" : "💸";
+            return `${i+1}\. ${em} ${t.tarih} · *${fmtN(t.tutar)} ₺* · ${t.kasa}\n    _${(t.aciklama||"").slice(0,35)}_`;
+          }).join("\n");
+          const gel = sonTxs.filter(t=>t.tur==="GELİR").reduce((a,t)=>a+Number(t.tutar),0);
+          const gid = sonTxs.filter(t=>t.tur==="GİDER").reduce((a,t)=>a+Number(t.tutar),0);
+          await tgSend(tgToken, chatId,
+            `📋 *Son 10 İşlem*\n\n${liste}\n\n💰 ${fmtN(gel)} ₺  💸 ${fmtN(gid)} ₺`
+          );
+        }
+      } catch(e) {}
     }
 
   } else if (aksiyon === "sil") {
